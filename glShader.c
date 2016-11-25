@@ -27,7 +27,8 @@ std::string readFile(const char *filePath) {
 }
 
 
-GLuint LoadShader(const char *vertex_path, const char *fragment_path) {
+GLuint LoadShader(const char *vertex_path, const char *fragment_path) 
+{
     GLuint vertShader = glCreateShader(GL_VERTEX_SHADER);
     GLuint fragShader = glCreateShader(GL_FRAGMENT_SHADER);
 
@@ -48,7 +49,7 @@ GLuint LoadShader(const char *vertex_path, const char *fragment_path) {
     // Check vertex shader
     glGetShaderiv(vertShader, GL_COMPILE_STATUS, &result);
     glGetShaderiv(vertShader, GL_INFO_LOG_LENGTH, &logLength);
-    std::vector vertShaderError((logLength > 1) ? logLength : 1);
+    std::vector<GLchar> vertShaderError((logLength > 1) ? logLength : 1);
     glGetShaderInfoLog(vertShader, logLength, NULL, &vertShaderError[0]);
     std::cout << &vertShaderError[0] << std::endl;
 
@@ -60,7 +61,7 @@ GLuint LoadShader(const char *vertex_path, const char *fragment_path) {
     // Check fragment shader
     glGetShaderiv(fragShader, GL_COMPILE_STATUS, &result);
     glGetShaderiv(fragShader, GL_INFO_LOG_LENGTH, &logLength);
-    std::vector fragShaderError((logLength > 1) ? logLength : 1);
+    std::vector<GLchar> fragShaderError((logLength > 1) ? logLength : 1);
     glGetShaderInfoLog(fragShader, logLength, NULL, &fragShaderError[0]);
     std::cout << &fragShaderError[0] << std::endl;
 
@@ -80,3 +81,11 @@ GLuint LoadShader(const char *vertex_path, const char *fragment_path) {
     glDeleteShader(fragShader);
 
     return program;
+}
+
+int main()
+{
+   //TODO: call loadProgram
+
+   return 0;
+}
