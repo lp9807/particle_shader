@@ -54,7 +54,7 @@ float SF_divergence( in sim_output simCoord, in sampler2DArray velTex )
    return divergence;
 }
 
-float SF_jocobi( in sim_output simCoord, in sampler2DArray pressureTex, 
+float SF_jacobi( in sim_output simCoord, in sampler2DArray pressureTex, 
                  in sampler2DArray divergenceTex )
 {
    // Get the divergence at the current cell.
