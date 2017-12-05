@@ -11,9 +11,29 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <map>
 #include <algorithm>
 
+#define TEX_WIDTH 640
+#define TEX_HEIGHT 480
+#define TEX_DEPTH 100
+
+struct geomData
+{
+   std::vector<GLuint> vboIds;
+};
+
+struct simTexData
+{
+  std::vector<GLuint> inputTexIds;
+  std::vector<std::string> inputTexNames;
+  std::vector<GLuint> simTexIds;
+  std::string fragShader;
+};
+
 std::string readFile(const char *filePath) {
+    if( !filePath ) return std::string();
+
     std::string content;
     std::ifstream fileStream(filePath, std::ios::in);
 
@@ -32,17 +52,35 @@ std::string readFile(const char *filePath) {
     return content;
 }
 
-
-GLuint LoadShader(const char *vertex_path, const char *geom_path, const char *fragment_path) 
+const char *dlGetErrorString( int error )
 {
-    GLuint vertShader = glCreateShader(GL_VERTEX_SHADER);
-    GLuint fragShader = glCreateShader(GL_FRAGMENT_SHADER);
-    GLuint geomShader = glCreateShader(GL_GEOMETRY_SHADER);
+    switch ( error )
+    {
+  case GL_INVALID_ENUM    : return "GL_INVALID_ENUM";
+  case GL_INVALID_VALUE     : return "GL_INVALID_VALUE";
+  case GL_INVALID_OPERATION   : return "GL_INVALID_OPERATION";
+  //case GL_STACK_OVERFLOW    : return "GL_STACK_OVERFLOW";
+  //case GL_STACK_UNDERFLOW   : return "GL_STACK_UNDERFLOW";
+  case GL_OUT_OF_MEMORY     : return "GL_OUT_OF_MEMORY";
+  //case GL_TABLE_TOO_LARGE       : return "GL_TABLE_TOO_LARGE";
+  case GL_INVALID_FRAMEBUFFER_OPERATION : return "GL_INVALID_FRAMEBUFFER_OPERATION";
+  case GL_FRAMEBUFFER_COMPLETE: return "GL_FRAMEBUFFER_COMPLETE";
+#ifdef GL_TEXTURE_TOO_LARGE_EXT
+  case GL_TEXTURE_TOO_LARGE_EXT   : return "GL_TEXTURE_TOO_LARGE_EXT";
+#endif
+  case GL_NO_ERROR                : return "GL_NO_ERROR";
+  default       : return "UNKNOWN GL ERROR";
+    }
+}
 
+
+GLuint LoadShader(const char *vertex_path, const char *fragment_path, const char *geom_path) 
+{
     // Read shaders
     std::string vertShaderStr = readFile(vertex_path);
     std::string fragShaderStr = readFile(fragment_path);
     std::string geomShaderStr = readFile(geom_path);
+
     const char *vertShaderSrc = vertShaderStr.c_str();
     const char *fragShaderSrc = fragShaderStr.c_str();
     const char *geomShaderSrc = geomShaderStr.c_str();
@@ -50,47 +88,64 @@ GLuint LoadShader(const char *vertex_path, const char *geom_path, const char *fr
     GLint result = GL_FALSE;
     int logLength;
 
-    // Compile vertex shader
-    std::cout << "Compiling vertex shader." << std::endl;
-    glShaderSource(vertShader, 1, &vertShaderSrc, NULL);
-    glCompileShader(vertShader);
+    GLuint vertShader = -1;
+    GLuint fragShader = -1;
+    GLuint geomShader = -1;
 
-    // Check vertex shader
-    glGetShaderiv(vertShader, GL_COMPILE_STATUS, &result);
-    glGetShaderiv(vertShader, GL_INFO_LOG_LENGTH, &logLength);
-    std::vector<GLchar> vertShaderError((logLength > 1) ? logLength : 1);
-    glGetShaderInfoLog(vertShader, logLength, NULL, &vertShaderError[0]);
-    std::cout << &vertShaderError[0] << std::endl;
+    if( !vertShaderStr.empty() )
+    {
+      vertShader = glCreateShader(GL_VERTEX_SHADER);
+      // Compile vertex shader
+      std::cout << "Compiling vertex shader:" << vertex_path << std::endl;
+      glShaderSource(vertShader, 1, &vertShaderSrc, NULL);
+      glCompileShader(vertShader);
 
-    // Compile fragment shader
-    std::cout << "Compiling fragment shader." << std::endl;
-    glShaderSource(fragShader, 1, &fragShaderSrc, NULL);
-    glCompileShader(fragShader);
+      // Check vertex shader
+      glGetShaderiv(vertShader, GL_COMPILE_STATUS, &result);
+      glGetShaderiv(vertShader, GL_INFO_LOG_LENGTH, &logLength);
+      std::vector<GLchar> vertShaderError((logLength > 1) ? logLength : 1);
+      glGetShaderInfoLog(vertShader, logLength, NULL, &vertShaderError[0]);
+      std::cout << &vertShaderError[0] << std::endl;
+    }
 
-    // Check fragment shader
-    glGetShaderiv(fragShader, GL_COMPILE_STATUS, &result);
-    glGetShaderiv(fragShader, GL_INFO_LOG_LENGTH, &logLength);
-    std::vector<GLchar> fragShaderError((logLength > 1) ? logLength : 1);
-    glGetShaderInfoLog(fragShader, logLength, NULL, &fragShaderError[0]);
-    std::cout << &fragShaderError[0] << std::endl;
+    if( !fragShaderStr.empty() )
+    {
+      fragShader = glCreateShader(GL_FRAGMENT_SHADER);
+      // Compile fragment shader
+      std::cout << "Compiling fragment shader:" << fragment_path << std::endl;
+      glShaderSource(fragShader, 1, &fragShaderSrc, NULL);
+      glCompileShader(fragShader);
 
-    // Compile geometry shader
-    std::cout << "Compiling geometry shader." << std::endl;
-    glShaderSource(geomShader, 1, &geomShaderSrc, NULL);
-    glCompileShader(geomShader);
+      // Check fragment shader
+      glGetShaderiv(fragShader, GL_COMPILE_STATUS, &result);
+      glGetShaderiv(fragShader, GL_INFO_LOG_LENGTH, &logLength);
+      std::vector<GLchar> fragShaderError((logLength > 1) ? logLength : 1);
+      glGetShaderInfoLog(fragShader, logLength, NULL, &fragShaderError[0]);
+      std::cout << &fragShaderError[0] << std::endl;
+    }
 
-    // Check geometry shader
-    glGetShaderiv(geomShader, GL_COMPILE_STATUS, &result);
-    glGetShaderiv(geomShader, GL_INFO_LOG_LENGTH, &logLength);
-    std::vector<GLchar> geomShaderError((logLength > 1)? logLength: 1);
-    glGetShaderInfoLog(geomShader, logLength, NULL, &geomShaderError[0]);
-    std::cout << &geomShaderError[0] << std::endl;
+    if( !geomShaderStr.empty() )
+    {
+       geomShader = glCreateShader(GL_GEOMETRY_SHADER);
+      // Compile geometry shader
+      std::cout << "Compiling geometry shader:" << geom_path << std::endl;
+      glShaderSource(geomShader, 1, &geomShaderSrc, NULL);
+      glCompileShader(geomShader);
+
+      // Check geometry shader
+      glGetShaderiv(geomShader, GL_COMPILE_STATUS, &result);
+      glGetShaderiv(geomShader, GL_INFO_LOG_LENGTH, &logLength);
+      std::vector<GLchar> geomShaderError((logLength > 1)? logLength: 1);
+      glGetShaderInfoLog(geomShader, logLength, NULL, &geomShaderError[0]);
+      std::cout << &geomShaderError[0] << std::endl;
+    }
 
     std::cout << "Linking program" << std::endl;
     GLuint program = glCreateProgram();
-    glAttachShader(program, vertShader);
-    glAttachShader(program, fragShader);
-    glAttachShader(program, geomShader);
+    if( vertShader != -1 ) glAttachShader(program, vertShader);
+    if( fragShader != -1 ) glAttachShader(program, fragShader);
+    if( geomShader != -1 ) glAttachShader(program, geomShader);
+
     glLinkProgram(program);
 
     glGetProgramiv(program, GL_LINK_STATUS, &result);
@@ -99,57 +154,309 @@ GLuint LoadShader(const char *vertex_path, const char *geom_path, const char *fr
     glGetProgramInfoLog(program, logLength, NULL, &programError[0]);
     std::cout << &programError[0] << std::endl;
   
-    glDeleteShader(vertShader);
-    glDeleteShader(fragShader);
-    glDeleteShader(geomShader);
+    if(vertShader != -1) glDeleteShader(vertShader);
+    if(fragShader != -1) glDeleteShader(fragShader);
+    if(geomShader != -1) glDeleteShader(geomShader);
 
     return program;
 }
 
-void display()
+void drawToTexture( const simTexData& texData )
 {
    //glClearColor(1.0f, 0.0f, 0.0f, 0.0f);
-   glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 
-   //GLint program = LoadShader("vertex.glsl","frag.glsl","geom.glsl");
-   //glUseProgram( program );
+   GLfloat quads[] = {
+    -1.0f, -1.0f, 0.0f,
+    1.0f, -1.0f, 0.0f,
+    -1.0f, 1.0f, 0.0f,
+    -1.0f, 1.0f, 0.0f,
+    1.0f, -1.0f, 0.0f,
+    1.0f, 1.0f, 0.0f,
+   };
 
-   const GLfloat vertices[] = {-1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f, -1.0f, 1.0f, 1.0f,
-                               1.0f, 1.0f, -1.0f, -1.0f, -1.0f,-1.0f, -1.0f,1.0f, -1.0f,
-                               1.0f, -1.0f, 1.0f, -1.0f, -1.0f,-1.0f,1.0f,-1.0f,-1.0f};
-   const GLfloat vertice_colors[] = {0.583f, 0.771f, 0.014f, 0.609f, 0.115f, 0.436f, 0.327f, 0.483f, 0.844f,
-                                    0.822f, 0.569f, 0.201f, 0.435f, 0.602f, 0.223f, 0.310f, 0.747f, 0.185f,
-                                    0.597f, 0.770f, 0.761f, 0.559f, 0.436f, 0.730f, 0.359f, 0.583f, 0.152f};
+  const GLfloat quads_colors[] = {0.583f, 0.771f, 0.014f, 
+                                  0.609f, 0.115f, 0.436f, 
+                                  0.327f, 0.483f, 0.844f,
+                                  0.822f, 0.569f, 0.201f, 
+                                  0.435f, 0.602f, 0.223f, 
+                                  0.310f, 0.747f, 0.185f,};
+
+   printf("size: %lu, %lu\n", sizeof(quads), sizeof(GLfloat) );
+   
+   GLenum error;
+
+   // bind input texture
+   for( int id = 0; id < texData.inputTexIds.size(); id++ )
+   {
+       glActiveTexture(GL_TEXTURE0 + id);
+       glBindTexture(GL_TEXTURE_3D, texData.inputTexIds[id]);
+   }
+
+   // define VBO
+   GLuint vboId[2];
+   glGenBuffers(2, vboId);
+
+   glBindBuffer(GL_ARRAY_BUFFER, vboId[0]);
+   glBufferData(GL_ARRAY_BUFFER, sizeof(quads), quads, GL_STATIC_DRAW);
+   // 1st parameter: attribute index, corresponding to layout number in shader
+   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+   glEnableVertexAttribArray(0);
+
+   glBindBuffer(GL_ARRAY_BUFFER, vboId[1]);
+   glBufferData(GL_ARRAY_BUFFER, sizeof(quads_colors), quads_colors, GL_STATIC_DRAW);
+   glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+   glEnableVertexAttribArray(1);
+
+   // define FBO
+   GLuint fboId;
+   glGenFramebuffers(1, &fboId);
+   glBindFramebuffer(GL_FRAMEBUFFER, fboId);
+
+   std::vector<GLenum> attachments;
+   attachments.reserve(texData.simTexIds.size());
+
+   // define the attachment to simulation Texture 
+   for( int id = 0; id < texData.simTexIds.size(); id++ )
+   {
+      glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+id, texData.simTexIds[id], 0 );
+      attachments.push_back(GLenum(GL_COLOR_ATTACHMENT0+id));
+   }
+   glDrawBuffers(attachments.size(), attachments.data());
+
+   error = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+   printf("glCheckFramebufferStatus: %s\n", dlGetErrorString(error) );
+
+   // clear FBO
+   glClear(GL_COLOR_BUFFER_BIT);
+
    // set uniform variables if any
+   GLint program = LoadShader("vertex.glsl",texData.fragShader.c_str(),"geom.glsl");
+   glUseProgram( program );
+
+   // set uniform
+   GLuint loc = -1;
+   std::map<std::string, GLfloat> uniforms;
+   uniforms["texWidth"] = 640;
+   uniforms["texHeight"] = 480;
+   uniforms["texDepth"] = 100;
+   for( auto& uniform : uniforms ) {
+     loc = glGetUniformLocation(program, uniform.first.c_str());
+     if( loc != -1 ) {
+       glUniform1f(loc, uniform.second);
+     }
+   }
+
+   for( auto i = 0; i < texData.inputTexIds.size(); i++ )
+   {
+     loc = glGetUniformLocation(program, texData.inputTexNames[i].c_str());
+     if( loc != -1 ) {
+      glUniform1i(loc, texData.inputTexIds[i]);
+     }
+   }
 
    // draw elements
-   GLuint vaoId, vboId;
+   glDrawArrays(GL_TRIANGLES, 0, 6);
+
+   // no shader enabled. GL3 requires shader anyway.
+   error = glGetError();
+   printf("glGetError: %s\n", dlGetErrorString(error) );
+   glUseProgram(0);
+
+   glDisableVertexAttribArray(0);
+   glDisableVertexAttribArray(1);
    
-   glGenVertexArrays(1, &vaoId);
-   glBindVertexArray(vaoId);
+   glDeleteBuffers(2, vboId);
+   glDeleteFramebuffers(1, &fboId);
 
-   glGenBuffers(1, &vboId);
-   glBindBuffer(GL_ARRAY_BUFFER, vboId);
-   glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+}
 
-   glEnableVertexAttribArray(vaoId);
-   glBindBuffer(GL_ARRAY_BUFFER, vboId); //?
+void drawToScreen(GLuint texId)
+{
+   GLfloat quads[] = {
+    -1.0f, -1.0f, 0.0f,
+    1.0f, -1.0f, 0.0f,
+    -1.0f, 1.0f, 0.0f,
+    -1.0f, 1.0f, 0.0f,
+    1.0f, -1.0f, 0.0f,
+    1.0f, 1.0f, 0.0f,
+   };
+
+   GLfloat quad_uvs[] = {
+    0.0f, 0.0f,
+    1.0f, 0.0f,
+    0.0f, 1.0f,
+    0.0f, 1.0f,
+    1.0f, 0.0f,
+    1.0f, 1.0f };
+
+    GLenum error;
+
+   // Render to screen
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+   // bind texture
+   glBindTexture(GL_TEXTURE_3D, texId);
+
+   // define VBO
+   GLuint vboId[2];
+   glGenBuffers(2, vboId);
+
+   // vertex
+   glBindBuffer(GL_ARRAY_BUFFER, vboId[0]);
+   glBufferData(GL_ARRAY_BUFFER, sizeof(quads), quads, GL_STATIC_DRAW );
    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
-   glDrawArrays(GL_TRIANGLES, 0, 3);
-   glDisableVertexAttribArray(vaoId);
+   glEnableVertexAttribArray(0);
 
-   glFlush();
+   // UV
+   glBindBuffer(GL_ARRAY_BUFFER, vboId[1]);
+   glBufferData(GL_ARRAY_BUFFER, sizeof(quad_uvs), quad_uvs, GL_STATIC_DRAW);
+   glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
+   glEnableVertexAttribArray(1);
 
-   /*glBegin(GL_TRIANGLES);
-     glVertex3f(1.0f, 1.0f, 0.0f);
-     glVertex3f(-1.0f, -1.0f, 0.0f);
-     glVertex3f(-0.75f, 0.25f, 0.0f);
-     glVertex3f();
-   glEnd();*/
+   error = glGetError();
+   printf("glGetError: %s\n", dlGetErrorString(error) );
 
-   //glUseProgram(0);
+   glClear(GL_COLOR_BUFFER_BIT);
+
+   // load shader
+   GLint program = LoadShader("vertex_screen.glsl","frag_raymarch.glsl",NULL);
+   glUseProgram( program );
+
+   error = glGetError();
+   printf("glGetError: %s\n", dlGetErrorString(error) );
+
+   glDrawArrays(GL_TRIANGLES, 0, 6);
+
+   error = glGetError();
+   printf("glGetError: %s\n", dlGetErrorString(error) );
+   glUseProgram(0);
 
    glutSwapBuffers();
+
+   glDisableVertexAttribArray(0);
+   glDisableVertexAttribArray(1);
+   glDeleteBuffers(2, vboId);
+}
+
+void initGeomData()
+{
+   const GLfloat vertices[] = {-1.0f, -1.0f, 0.0f, 
+                                1.0f, -1.0f, 0.0f, 
+                                0.0f, 1.0f, 0.0f }; /*{-1.0f, -1.0f, -1.0f, -1.0f, -1.0f, 1.0f, -1.0f, 1.0f, 1.0f,
+                               1.0f, 1.0f, -1.0f, -1.0f, -1.0f,-1.0f, -1.0f,1.0f, -1.0f,
+                               1.0f, -1.0f, 1.0f, -1.0f, -1.0f,-1.0f,1.0f,-1.0f,-1.0f};*/
+   const GLfloat vertice_colors[] = {0.583f, 0.771f, 0.014f, 
+                                     0.609f, 0.115f, 0.436f, 
+                                     0.327f, 0.483f, 0.844f};
+   /*const GLfloat vertice_colors[] = {0.583f, 0.771f, 0.014f, 0.609f, 0.115f, 0.436f, 0.327f, 0.483f, 0.844f,
+                                    0.822f, 0.569f, 0.201f, 0.435f, 0.602f, 0.223f, 0.310f, 0.747f, 0.185f,
+                                    0.597f, 0.770f, 0.761f, 0.559f, 0.436f, 0.730f, 0.359f, 0.583f, 0.152f};*/
+
+
+   GLuint vboId[2];
+   glGenBuffers(2, vboId);
+
+   glBindBuffer(GL_ARRAY_BUFFER, vboId[0]);
+   glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+   // 1st parameter: attribute index, corresponding to layout number in shader
+   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+   glEnableVertexAttribArray(0);
+
+   glBindBuffer(GL_ARRAY_BUFFER, vboId[1]);
+   glBufferData(GL_ARRAY_BUFFER, sizeof(vertice_colors), vertice_colors, GL_STATIC_DRAW);
+   glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+   glEnableVertexAttribArray(1);
+}
+
+void initTextureData()
+{
+
+}
+
+void display()
+{
+  // default VAO for gl3 core-profile.
+  GLuint vaoId;
+  glGenVertexArrays(1, &vaoId);
+  glBindVertexArray(vaoId);
+
+  // all textures: input & output
+  GLuint velTexIds[2]; // velocity0+1
+  GLuint pdTexIds[2]; // [p]ressure[d]ivergence0+1 
+  //TODO: GLuint extraTexIds[3]; // ? phi, phi_n_hat, phi_n_1_hat
+  glGenTextures(2, velTexIds);
+  glGenTextures(2, pdTexIds);
+
+  for( int i = 0; i < 2; i++) 
+  {
+    glBindTexture(GL_TEXTURE_3D, velTexIds[i]);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+    glBindTexture(GL_TEXTURE_3D, pdTexIds[i]);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  }
+
+  // hard-coded time step
+  const int limit = 2;
+  int currStep = 0;
+  int currId = 0, targetId = 1;
+
+  simTexData texData;
+  
+  //TODO: init state of velocity and pressure texture
+  /*
+  texData.inputTexIds = {};
+  texData.simTexIds = {velTexIds[currId], pdTexIds[currId]};
+  texData.fragShader = "frag_init_vel_pressure.glsl";
+  drawToTexture( texData );
+  */
+
+  while( currStep < limit )
+  {
+    // 1. advect: 
+    // input: velocity
+    // output: intermediate velocity
+    texData.inputTexIds = { velTexIds[currId] };
+    texData.inputTexNames = { "velocity" };
+    texData.simTexIds = { velTexIds[targetId] };
+    texData.fragShader = "frag_pass1_advect.glsl";
+    drawToTexture( texData );
+
+    // 2. diffuse: 
+    // input: pressure
+    // output: new pressure
+    texData.inputTexIds = { pdTexIds[currId] };
+    texData.inputTexNames = { "pdtex" };
+    texData.simTexIds = { pdTexIds[targetId] };
+    texData.fragShader = "frag_pass2_diffuse.glsl";
+    drawToTexture( texData );
+
+    // 3. projection: 
+    // input: intermediate velocity & pressure
+    // output: divengence & final velocity
+    texData.inputTexIds = { velTexIds[targetId], pdTexIds[currId] };
+    texData.inputTexNames = { "velocity", "pdtex" };
+    texData.simTexIds = { velTexIds[currId], pdTexIds[targetId] };
+    texData.fragShader = "frag_pass3_proj.glsl";
+    drawToTexture( texData );
+
+    // TODO:ray march to draw 3D texture
+    drawToScreen(velTexIds[currId]);
+
+    currStep++;
+    
+    // swap texture
+    currId = (++currId)%2;
+    targetId = (1-currId);
+  }
+
+  glDeleteVertexArrays(1, &vaoId);
+  glDeleteTextures(2, velTexIds);
+  glDeleteTextures(2, pdTexIds);
 }
 
 int main(int argc, char** argv)

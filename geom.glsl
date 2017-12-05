@@ -1,28 +1,38 @@
 #version 150
 
 layout(triangles) in;
-layout(traingle_strip, max_vertices=3) out;
+layout(triangle_strip, max_vertices=300) out;
 
-in VertexData {
+/*in VertexData {
 	vec2 texCoord;
 	vec3 normal;
-} VertexIn[3];
+} VertexIn[3];*/
+in vec3 vtx_Color[];
 
-out VertexData {
+/*out VertexData {
 	vec2 texCoord;
 	vec3 normal;	
-} VertexOut;
+} VertexOut;*/
+out vec3 geom_Color;
+out vec2 layerID;
 
 void main()
 {
-	for(int i = 0; i < gl_in.length(); i++)
+	for( int j = 0; j < 100; j++)
 	{
-	   // copy attributes
-	   gl_Postion = gl_in[i].gl_Position;
-	   VertexOut.normal = VertexIn[i].normal;
-	   VertexOut.texCoord = VertexIn[i].texCoord;
-
-	   // done with the vertex
-	   EmitVertex();
+		for(int i = 0; i < gl_in.length(); i++)
+		{
+	 		gl_Layer = j;
+	 		layerID[0] = j;
+			// copy attributes
+			gl_Position = vec4( gl_in[i].gl_Position.x+0.1*j, gl_in[i].gl_Position.yz, 1.0 );
+			//VertexOut.normal = VertexIn[i].normal;
+			//VertexOut.texCoord = VertexIn[i].texCoord;
+			geom_Color = vec3( vtx_Color[i].xyz );
+		   	// done with the vertex
+		   	EmitVertex();
+		}
+		EndPrimitive();
 	}
+
 }
