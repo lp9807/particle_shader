@@ -4,9 +4,9 @@ in vec2 layerID;
 in vec3 geom_Color;
 in vec2 geom_UV;
 
-//layout(location=0) out vec4 FragColor;
+layout(location=0) out vec4 FragColor;
 //layout(location=1) out vec4 pdTexOut;
-out vec4 FragColor;
+//out vec4 FragColor;
 
 uniform float texWidth;
 uniform float texHeight;

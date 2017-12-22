@@ -10,7 +10,7 @@ in vec2 layerID;*/
 out vec4 FragColor;
 
 //uniform sampler3D density;
-uniform sampler2D velocity;
+uniform sampler3D velocity;
 
 uniform vec3 lightPos;
 uniform vec3 lightIntensity;
@@ -73,7 +73,7 @@ void main()
 	fragColor = vec4(Lo.xyz, 1.0-T);
     */
 
-	FragColor = texture( velocity, vec2(vtx_UV.xy) );
+	FragColor = texture( velocity, vec3(vtx_UV.xy, 0.0) );
 	//FragColor.xyz = geom_Color;
 	//FragColor.xyz = vec3(vtx_UV.xy, 0.0);
 }
