@@ -228,9 +228,6 @@ void drawToTexture( const simTexData& texData )
    
    GLenum error;
 
-   // bind input data
-   bindInputTexture( texData );
-
    // define VBO
    GLuint vboId[3];
    glGenBuffers(3, vboId);
@@ -250,6 +247,9 @@ void drawToTexture( const simTexData& texData )
    glBufferData(GL_ARRAY_BUFFER, sizeof(quad_uvs), quad_uvs, GL_STATIC_DRAW);
    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
    glEnableVertexAttribArray(2);
+
+   // bind input data
+   bindInputTexture( texData );
 
    // define FBO
    GLuint fboId;
@@ -271,8 +271,8 @@ void drawToTexture( const simTexData& texData )
    printf("glCheckFramebufferStatus: %s\n", dlGetErrorString(error) );
 
    // clear FBO
-   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-   glClear(GL_COLOR_BUFFER_BIT);
+   //glClearColor(1.0f, 0.0f, 0.0f, 0.0f);
+   //glClear(GL_COLOR_BUFFER_BIT);
 
    // set uniform variables if any
    GLint program = LoadShader("vertex.glsl",texData.fragShader.c_str(),"geom.glsl");
@@ -281,12 +281,14 @@ void drawToTexture( const simTexData& texData )
    setupUnifom( program, texData );
 
    // draw elements
-   glDrawArrays(GL_TRIANGLES, 0, 3);
+   glDrawArrays(GL_TRIANGLES, 0, 6);
 
    // no shader enabled. GL3 requires shader anyway.
    error = glGetError();
    printf("glGetError after glDrawArrays: %s\n", dlGetErrorString(error) );
    glUseProgram(0);
+
+   glutSwapBuffers();
 
    glDisableVertexAttribArray(0);
    glDisableVertexAttribArray(1);
@@ -320,9 +322,6 @@ void drawToScreen( const simTexData& texData )
 
     GLenum error;
 
-   // Render to screen
-   glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
    // bind texture
    bindInputTexture( texData );
 
@@ -348,7 +347,7 @@ void drawToScreen( const simTexData& texData )
    glClear(GL_COLOR_BUFFER_BIT);
 
    // load shader
-   GLint program = LoadShader("vertex_screen.glsl",texData.fragShader.c_str(),NULL);//"geom.glsl");
+   GLint program = LoadShader("vertex_screen.glsl",texData.fragShader.c_str(),NULL);
    glUseProgram( program );
 
    setupUnifom( program, texData );
@@ -418,17 +417,21 @@ void display()
   glGenTextures(2, velTexIds);
   glGenTextures(2, pdTexIds);
 
-  for( int i = 0; i < 2; i++) 
+  for( int i = 0; i < 1; i++) 
   {
     glBindTexture(GL_TEXTURE_3D, velTexIds[i]);
     glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    /*glBindTexture(GL_TEXTURE_2D, velTexIds[i]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);*/
 
-    glBindTexture(GL_TEXTURE_3D, pdTexIds[i]);
-    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    /*glBindTexture(GL_TEXTURE_3D, pdTexIds[i]);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);*/
   }
 
   // hard-coded time step
@@ -444,7 +447,7 @@ void display()
   
   //init state of velocity and pressure texture
   texData.inputTexIds = {};
-  texData.outputTexIds = {velTexIds[currId], pdTexIds[currId]};
+  texData.outputTexIds = {velTexIds[currId]}; //, pdTexIds[currId]};
   texData.fragShader = "frag_init_all.glsl";
   drawToTexture( texData );
 
@@ -493,7 +496,6 @@ void display()
     currId = (++currId)%2;
     targetId = (1-currId);
   }
-
   */
 
   // ray march to draw 3D texture
@@ -515,12 +517,16 @@ int main(int argc, char** argv)
    glutInitDisplayMode(GLUT_3_2_CORE_PROFILE | GLUT_DOUBLE | GLUT_RGBA);
    glutInitWindowSize(640,480);
    glutInitWindowPosition(100,100);
-   glutCreateWindow("RayMarch");
+   glutCreateWindow("Ray March!");
 
    const GLubyte* renderer = glGetString(GL_RENDERER);
    const GLubyte* version = glGetString(GL_VERSION);
    printf("Renderer: %s\n", renderer);
    printf("OpenGL version supported: %s\n", version);
+
+   GLint value;
+   glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &value);
+   printf("max 3D texture size: %d\n", value);
 
    glutDisplayFunc(display);
    glutMainLoop();

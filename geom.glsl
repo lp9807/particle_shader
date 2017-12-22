@@ -31,7 +31,7 @@ void main()
 	 		layerID = vec2(j);
 			// copy attributes
 			gl_Position = vec4( gl_in[i].gl_Position.xy+0.01*j, gl_in[i].gl_Position.zw );
-			geom_Color = vec3( vtx_Color[i].xyz * 0.01 * (j));
+			geom_Color = vec3( vtx_Color[i].xyz );
 			geom_UV = vec2( vtx_UV[i].xy );
 		   	// done with the vertex
 		   	EmitVertex();

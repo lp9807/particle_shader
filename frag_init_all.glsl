@@ -4,8 +4,9 @@ in vec2 layerID;
 in vec3 geom_Color;
 in vec2 geom_UV;
 
-layout(location=0) out vec4 velocityOut;
-layout(location=1) out vec4 pdTexOut;
+//layout(location=0) out vec4 FragColor;
+//layout(location=1) out vec4 pdTexOut;
+out vec4 FragColor;
 
 uniform float texWidth;
 uniform float texHeight;
@@ -108,8 +109,8 @@ float Perlin(vec3 P)
 void main(void)
 {
 	vec3 cube = vec3( texWidth, texHeight, texDepth );
-	vec3 frequency = 5.0 / cube;  
-    vec3 pos = vec3( geom_UV.xy, layerID.x/cube.z );  
+	vec3 frequency = 40.0 / cube;  
+    vec3 pos = vec3( geom_UV.xy * cube.xy, layerID.x );  
     float noise = abs( Perlin( pos*frequency ) );
 
     /*
@@ -119,7 +120,7 @@ void main(void)
     float color = (d-noise) < r) ? 255:0;
     */
 
-	velocityOut = vec4( noise, noise, noise, 1.0 );
-    //velocityOut.xyz = geom_Color;
-	pdTexOut = velocityOut;
+	FragColor = vec4( noise, noise, noise, 1.0 );
+    //FragColor = vec4(geom_UV.xy, 0.0, 1.0);
+	//pdTexOut = velocityOut;
 }

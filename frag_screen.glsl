@@ -3,13 +3,14 @@
 // Interpolated values from the vertex shaders
 in vec2 vtx_UV;
 in vec3 vtx_Color;
-//in vec2 geom_UV;
-//in vec3 geom_Color;
+/*in vec2 geom_UV;
+in vec3 geom_Color;
+in vec2 layerID;*/
 
 out vec4 FragColor;
 
 //uniform sampler3D density;
-uniform sampler3D velocity;
+uniform sampler2D velocity;
 
 uniform vec3 lightPos;
 uniform vec3 lightIntensity;
@@ -72,7 +73,7 @@ void main()
 	fragColor = vec4(Lo.xyz, 1.0-T);
     */
 
-	FragColor = texture( velocity, vec3(geom_UV.xy, 1.0) );
-	//FragColor.xyz = vtx_Color;
-	//FragColor.xyz = vec3(layerID.x/texDepth, 0.0, 0.0);
+	FragColor = texture( velocity, vec2(vtx_UV.xy) );
+	//FragColor.xyz = geom_Color;
+	//FragColor.xyz = vec3(vtx_UV.xy, 0.0);
 }

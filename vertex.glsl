@@ -8,7 +8,7 @@ out vec2 vtx_UV;
 
 void main()
 {
-	gl_Position.xyz = in_Position;
+	gl_Position = vec4(in_Position, 1.0);
 	vtx_Color = in_Color;
 	vtx_UV = in_UV;
 }
