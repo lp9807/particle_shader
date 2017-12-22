@@ -13,6 +13,7 @@
 #include <vector>
 #include <map>
 #include <algorithm>
+#include <cmath>
 
 #define TEX_WIDTH 640
 #define TEX_HEIGHT 480
@@ -27,8 +28,9 @@ struct simTexData
 {
   std::vector<GLuint> inputTexIds;
   std::vector<std::string> inputTexNames;
-  std::vector<GLuint> simTexIds;
+  std::vector<GLuint> outputTexIds;
   std::string fragShader;
+  std::map<std::string, GLfloat> uniforms;
 };
 
 std::string readFile(const char *filePath) {
@@ -72,7 +74,6 @@ const char *dlGetErrorString( int error )
   default       : return "UNKNOWN GL ERROR";
     }
 }
-
 
 GLuint LoadShader(const char *vertex_path, const char *fragment_path, const char *geom_path) 
 {
@@ -161,85 +162,27 @@ GLuint LoadShader(const char *vertex_path, const char *fragment_path, const char
     return program;
 }
 
-void drawToTexture( const simTexData& texData )
+void bindInputTexture( const simTexData& texData )
 {
-   //glClearColor(1.0f, 0.0f, 0.0f, 0.0f);
-
-   GLfloat quads[] = {
-    -1.0f, -1.0f, 0.0f,
-    1.0f, -1.0f, 0.0f,
-    -1.0f, 1.0f, 0.0f,
-    -1.0f, 1.0f, 0.0f,
-    1.0f, -1.0f, 0.0f,
-    1.0f, 1.0f, 0.0f,
-   };
-
-  const GLfloat quads_colors[] = {0.583f, 0.771f, 0.014f, 
-                                  0.609f, 0.115f, 0.436f, 
-                                  0.327f, 0.483f, 0.844f,
-                                  0.822f, 0.569f, 0.201f, 
-                                  0.435f, 0.602f, 0.223f, 
-                                  0.310f, 0.747f, 0.185f,};
-
-   printf("size: %lu, %lu\n", sizeof(quads), sizeof(GLfloat) );
-   
-   GLenum error;
-
-   // bind input texture
+     // bind input texture
    for( int id = 0; id < texData.inputTexIds.size(); id++ )
    {
        glActiveTexture(GL_TEXTURE0 + id);
        glBindTexture(GL_TEXTURE_3D, texData.inputTexIds[id]);
    }
 
-   // define VBO
-   GLuint vboId[2];
-   glGenBuffers(2, vboId);
-
-   glBindBuffer(GL_ARRAY_BUFFER, vboId[0]);
-   glBufferData(GL_ARRAY_BUFFER, sizeof(quads), quads, GL_STATIC_DRAW);
-   // 1st parameter: attribute index, corresponding to layout number in shader
-   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
-   glEnableVertexAttribArray(0);
-
-   glBindBuffer(GL_ARRAY_BUFFER, vboId[1]);
-   glBufferData(GL_ARRAY_BUFFER, sizeof(quads_colors), quads_colors, GL_STATIC_DRAW);
-   glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
-   glEnableVertexAttribArray(1);
-
-   // define FBO
-   GLuint fboId;
-   glGenFramebuffers(1, &fboId);
-   glBindFramebuffer(GL_FRAMEBUFFER, fboId);
-
-   std::vector<GLenum> attachments;
-   attachments.reserve(texData.simTexIds.size());
-
-   // define the attachment to simulation Texture 
-   for( int id = 0; id < texData.simTexIds.size(); id++ )
+   if( texData.inputTexIds.empty() )
    {
-      glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+id, texData.simTexIds[id], 0 );
-      attachments.push_back(GLenum(GL_COLOR_ATTACHMENT0+id));
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_3D, 0);
    }
-   glDrawBuffers(attachments.size(), attachments.data());
+}
 
-   error = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-   printf("glCheckFramebufferStatus: %s\n", dlGetErrorString(error) );
-
-   // clear FBO
-   glClear(GL_COLOR_BUFFER_BIT);
-
-   // set uniform variables if any
-   GLint program = LoadShader("vertex.glsl",texData.fragShader.c_str(),"geom.glsl");
-   glUseProgram( program );
-
-   // set uniform
+void setupUnifom( GLint program, const simTexData& texData )
+{
+     // set uniform
    GLuint loc = -1;
-   std::map<std::string, GLfloat> uniforms;
-   uniforms["texWidth"] = 640;
-   uniforms["texHeight"] = 480;
-   uniforms["texDepth"] = 100;
-   for( auto& uniform : uniforms ) {
+   for( auto& uniform : texData.uniforms ) {
      loc = glGetUniformLocation(program, uniform.first.c_str());
      if( loc != -1 ) {
        glUniform1f(loc, uniform.second);
@@ -253,29 +196,115 @@ void drawToTexture( const simTexData& texData )
       glUniform1i(loc, texData.inputTexIds[i]);
      }
    }
+}
+
+void drawToTexture( const simTexData& texData )
+{
+   GLfloat quads[] = {
+    -1.0f, -1.0f, 0.0f,
+    -1.0f, 1.0f, 0.0f,
+    1.0f, -1.0f, 0.0f,
+    -1.0f, 1.0f, 0.0f,
+    1.0f, -1.0f, 0.0f,
+    1.0f, 1.0f, 0.0f,
+   };
+
+  const GLfloat quad_colors[] = { 0.583f, 0.771f, 0.014f, 
+                                  0.609f, 0.115f, 0.436f, 
+                                  0.327f, 0.483f, 0.844f,
+                                  0.822f, 0.569f, 0.201f, 
+                                  0.435f, 0.602f, 0.223f, 
+                                  0.310f, 0.747f, 0.185f,};
+
+  GLfloat quad_uvs[] = {
+    0.0f, 0.0f,
+    1.0f, 0.0f,
+    0.0f, 1.0f,
+    0.0f, 1.0f,
+    1.0f, 0.0f,
+    1.0f, 1.0f };
+
+   printf("size: %lu, %lu\n", sizeof(quads), sizeof(GLfloat) );
+   
+   GLenum error;
+
+   // bind input data
+   bindInputTexture( texData );
+
+   // define VBO
+   GLuint vboId[3];
+   glGenBuffers(3, vboId);
+
+   glBindBuffer(GL_ARRAY_BUFFER, vboId[0]);
+   glBufferData(GL_ARRAY_BUFFER, sizeof(quads), quads, GL_STATIC_DRAW);
+   // 1st parameter: attribute index, corresponding to layout number in shader
+   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+   glEnableVertexAttribArray(0);
+
+   glBindBuffer(GL_ARRAY_BUFFER, vboId[1]);
+   glBufferData(GL_ARRAY_BUFFER, sizeof(quad_colors), quad_colors, GL_STATIC_DRAW);
+   glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+   glEnableVertexAttribArray(1);
+
+   glBindBuffer(GL_ARRAY_BUFFER, vboId[2]);
+   glBufferData(GL_ARRAY_BUFFER, sizeof(quad_uvs), quad_uvs, GL_STATIC_DRAW);
+   glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
+   glEnableVertexAttribArray(2);
+
+   // define FBO
+   GLuint fboId;
+   glGenFramebuffers(1, &fboId);
+   glBindFramebuffer(GL_FRAMEBUFFER, fboId);
+
+   std::vector<GLenum> attachments;
+   attachments.reserve(texData.outputTexIds.size());
+
+   // define the attachment to simulation Texture 
+   for( int id = 0; id < texData.outputTexIds.size(); id++ )
+   {
+      glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0+id, texData.outputTexIds[id], 0 );
+      attachments.push_back(GLenum(GL_COLOR_ATTACHMENT0+id));
+   }
+   glDrawBuffers(attachments.size(), attachments.data());
+
+   error = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+   printf("glCheckFramebufferStatus: %s\n", dlGetErrorString(error) );
+
+   // clear FBO
+   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+   glClear(GL_COLOR_BUFFER_BIT);
+
+   // set uniform variables if any
+   GLint program = LoadShader("vertex.glsl",texData.fragShader.c_str(),"geom.glsl");
+   glUseProgram( program );
+
+   setupUnifom( program, texData );
 
    // draw elements
-   glDrawArrays(GL_TRIANGLES, 0, 6);
+   glDrawArrays(GL_TRIANGLES, 0, 3);
 
    // no shader enabled. GL3 requires shader anyway.
    error = glGetError();
-   printf("glGetError: %s\n", dlGetErrorString(error) );
+   printf("glGetError after glDrawArrays: %s\n", dlGetErrorString(error) );
    glUseProgram(0);
 
    glDisableVertexAttribArray(0);
    glDisableVertexAttribArray(1);
-   
-   glDeleteBuffers(2, vboId);
+   glDisableVertexAttribArray(2);
+
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+   glDeleteBuffers(3, vboId);
    glDeleteFramebuffers(1, &fboId);
 
 }
 
-void drawToScreen(GLuint texId)
+void drawToScreen( const simTexData& texData )
 {
    GLfloat quads[] = {
     -1.0f, -1.0f, 0.0f,
-    1.0f, -1.0f, 0.0f,
     -1.0f, 1.0f, 0.0f,
+    1.0f, -1.0f, 0.0f,
     -1.0f, 1.0f, 0.0f,
     1.0f, -1.0f, 0.0f,
     1.0f, 1.0f, 0.0f,
@@ -295,7 +324,7 @@ void drawToScreen(GLuint texId)
    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
    // bind texture
-   glBindTexture(GL_TEXTURE_3D, texId);
+   bindInputTexture( texData );
 
    // define VBO
    GLuint vboId[2];
@@ -319,8 +348,10 @@ void drawToScreen(GLuint texId)
    glClear(GL_COLOR_BUFFER_BIT);
 
    // load shader
-   GLint program = LoadShader("vertex_screen.glsl","frag_raymarch.glsl",NULL);
+   GLint program = LoadShader("vertex_screen.glsl",texData.fragShader.c_str(),NULL);//"geom.glsl");
    glUseProgram( program );
+
+   setupUnifom( program, texData );
 
    error = glGetError();
    printf("glGetError: %s\n", dlGetErrorString(error) );
@@ -406,15 +437,18 @@ void display()
   int currId = 0, targetId = 1;
 
   simTexData texData;
-  
-  //TODO: init state of velocity and pressure texture
-  /*
-  texData.inputTexIds = {};
-  texData.simTexIds = {velTexIds[currId], pdTexIds[currId]};
-  texData.fragShader = "frag_init_vel_pressure.glsl";
-  drawToTexture( texData );
-  */
 
+  texData.uniforms["texWidth"] = TEX_WIDTH;
+  texData.uniforms["texHeight"] = TEX_HEIGHT;
+  texData.uniforms["texDepth"] = TEX_DEPTH;
+  
+  //init state of velocity and pressure texture
+  texData.inputTexIds = {};
+  texData.outputTexIds = {velTexIds[currId], pdTexIds[currId]};
+  texData.fragShader = "frag_init_all.glsl";
+  drawToTexture( texData );
+
+/*
   while( currStep < limit )
   {
     // 1. advect: 
@@ -422,7 +456,7 @@ void display()
     // output: intermediate velocity
     texData.inputTexIds = { velTexIds[currId] };
     texData.inputTexNames = { "velocity" };
-    texData.simTexIds = { velTexIds[targetId] };
+    texData.outputTexIds = { velTexIds[targetId] };
     texData.fragShader = "frag_pass1_advect.glsl";
     drawToTexture( texData );
 
@@ -431,7 +465,7 @@ void display()
     // output: new pressure
     texData.inputTexIds = { pdTexIds[currId] };
     texData.inputTexNames = { "pdtex" };
-    texData.simTexIds = { pdTexIds[targetId] };
+    texData.outputTexIds = { pdTexIds[targetId] };
     texData.fragShader = "frag_pass2_diffuse.glsl";
     drawToTexture( texData );
 
@@ -440,12 +474,18 @@ void display()
     // output: divengence & final velocity
     texData.inputTexIds = { velTexIds[targetId], pdTexIds[currId] };
     texData.inputTexNames = { "velocity", "pdtex" };
-    texData.simTexIds = { velTexIds[currId], pdTexIds[targetId] };
+    texData.outputTexIds = { velTexIds[currId], pdTexIds[targetId] };
     texData.fragShader = "frag_pass3_proj.glsl";
     drawToTexture( texData );
 
-    // TODO:ray march to draw 3D texture
-    drawToScreen(velTexIds[currId]);
+
+    // ray march to draw 3D texture
+    texData.inputTexIds = { velTexIds[currId] };
+    texData.inputTexNames = { "velocity" };
+    texData.outputTexIds = {};
+    texData.fragShader = "frag_screen.glsl";
+    texData.uniforms["absorption"] = 0.4;
+    drawToScreen( texData );
 
     currStep++;
     
@@ -453,6 +493,16 @@ void display()
     currId = (++currId)%2;
     targetId = (1-currId);
   }
+
+  */
+
+  // ray march to draw 3D texture
+  texData.inputTexIds = { velTexIds[currId] };
+  texData.inputTexNames = { "velocity" };
+  texData.outputTexIds = {};
+  texData.fragShader = "frag_screen.glsl";
+  texData.uniforms["absorption"] = 0.4;
+  drawToScreen( texData );
 
   glDeleteVertexArrays(1, &vaoId);
   glDeleteTextures(2, velTexIds);
@@ -465,7 +515,7 @@ int main(int argc, char** argv)
    glutInitDisplayMode(GLUT_3_2_CORE_PROFILE | GLUT_DOUBLE | GLUT_RGBA);
    glutInitWindowSize(640,480);
    glutInitWindowPosition(100,100);
-   glutCreateWindow("Geometry Shader");
+   glutCreateWindow("RayMarch");
 
    const GLubyte* renderer = glGetString(GL_RENDERER);
    const GLubyte* version = glGetString(GL_VERSION);
