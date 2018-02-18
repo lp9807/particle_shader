@@ -1,5 +1,4 @@
 #version 330 core
-in vec3 geom_Color;
 in vec2 layerID;
 
 layout(location=0) out vec4 fragColor;
@@ -76,6 +75,4 @@ void main(void)
   fragColor = SF_project( currCoord, velocity, pdtex );
   float divergence = SF_divergence(currCoord, velocity);
   fragColor.y = divergence;
-
-  geom_Color;
 }

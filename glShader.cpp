@@ -75,6 +75,18 @@ const char *dlGetErrorString( int error )
     }
 }
 
+const char *dlGetProvokingMode( int error )
+{
+    switch( error )
+    {
+        case GL_FIRST_VERTEX_CONVENTION: return "GL_FIRST_VERTEX_CONVENTION";
+        case GL_PROVOKING_VERTEX: return "GL_PROVOKING_VERTEX";
+        case GL_LAST_VERTEX_CONVENTION: return "GL_LAST_VERTEX_CONVENTION";                          
+        case GL_UNDEFINED_VERTEX: return "GL_UNDEFINED_VERTEX";
+        default : return "UNKNOWN GL ERROR";
+    }
+}
+
 GLuint LoadShader(const char *vertex_path, const char *fragment_path, const char *geom_path) 
 {
     // Read shaders
@@ -193,7 +205,7 @@ void setupUnifom( GLint program, const simTexData& texData )
    {
      loc = glGetUniformLocation(program, texData.inputTexNames[i].c_str());
      if( loc != -1 ) {
-      glUniform1i(loc, texData.inputTexIds[i]);
+      glUniform1i(loc, i);
      }
    }
 }
@@ -218,13 +230,13 @@ void drawToTexture( const simTexData& texData )
 
   GLfloat quad_uvs[] = {
     0.0f, 0.0f,
-    1.0f, 0.0f,
     0.0f, 1.0f,
+    1.0f, 0.0f,
     0.0f, 1.0f,
     1.0f, 0.0f,
     1.0f, 1.0f };
 
-   printf("size: %lu, %lu\n", sizeof(quads), sizeof(GLfloat) );
+   printf("quad size: %lu, %lu\n", sizeof(quads), sizeof(GLfloat) );
    
    GLenum error;
 
@@ -248,9 +260,6 @@ void drawToTexture( const simTexData& texData )
    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
    glEnableVertexAttribArray(2);
 
-   // bind input data
-   bindInputTexture( texData );
-
    // define FBO
    GLuint fboId;
    glGenFramebuffers(1, &fboId);
@@ -270,9 +279,12 @@ void drawToTexture( const simTexData& texData )
    error = glCheckFramebufferStatus(GL_FRAMEBUFFER);
    printf("glCheckFramebufferStatus: %s\n", dlGetErrorString(error) );
 
+   // bind input data
+   bindInputTexture( texData );
+
    // clear FBO
-   //glClearColor(1.0f, 0.0f, 0.0f, 0.0f);
-   //glClear(GL_COLOR_BUFFER_BIT);
+   glClearColor(1.0f, 0.0f, 0.0f, 0.0f);
+   glClear(GL_COLOR_BUFFER_BIT);
 
    // set uniform variables if any
    GLint program = LoadShader("vertex.glsl",texData.fragShader.c_str(),"geom.glsl");
@@ -282,23 +294,20 @@ void drawToTexture( const simTexData& texData )
 
    // draw elements
    glDrawArrays(GL_TRIANGLES, 0, 6);
-
-   // no shader enabled. GL3 requires shader anyway.
+   
+   // GL3 requires shader anyway.
    error = glGetError();
    printf("glGetError after glDrawArrays: %s\n", dlGetErrorString(error) );
+   
+   glBindFramebuffer(GL_FRAMEBUFFER, 0);
    glUseProgram(0);
-
-   glutSwapBuffers();
 
    glDisableVertexAttribArray(0);
    glDisableVertexAttribArray(1);
    glDisableVertexAttribArray(2);
 
-   glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
    glDeleteBuffers(3, vboId);
    glDeleteFramebuffers(1, &fboId);
-
 }
 
 void drawToScreen( const simTexData& texData )
@@ -314,16 +323,13 @@ void drawToScreen( const simTexData& texData )
 
    GLfloat quad_uvs[] = {
     0.0f, 0.0f,
-    1.0f, 0.0f,
     0.0f, 1.0f,
+    1.0f, 0.0f,
     0.0f, 1.0f,
     1.0f, 0.0f,
     1.0f, 1.0f };
 
     GLenum error;
-
-   // bind texture
-   bindInputTexture( texData );
 
    // define VBO
    GLuint vboId[2];
@@ -340,6 +346,9 @@ void drawToScreen( const simTexData& texData )
    glBufferData(GL_ARRAY_BUFFER, sizeof(quad_uvs), quad_uvs, GL_STATIC_DRAW);
    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
    glEnableVertexAttribArray(1);
+
+   // bind texture
+   bindInputTexture( texData );
 
    error = glGetError();
    printf("glGetError: %s\n", dlGetErrorString(error) );
@@ -417,21 +426,17 @@ void display()
   glGenTextures(2, velTexIds);
   glGenTextures(2, pdTexIds);
 
-  for( int i = 0; i < 1; i++) 
+  for( int i = 0; i < 2; i++) 
   {
     glBindTexture(GL_TEXTURE_3D, velTexIds[i]);
     glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    /*glBindTexture(GL_TEXTURE_2D, velTexIds[i]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);*/
 
-    /*glBindTexture(GL_TEXTURE_3D, pdTexIds[i]);
+    glBindTexture(GL_TEXTURE_3D, pdTexIds[i]);
     glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);*/
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   }
 
   // hard-coded time step
@@ -447,7 +452,7 @@ void display()
   
   //init state of velocity and pressure texture
   texData.inputTexIds = {};
-  texData.outputTexIds = {velTexIds[currId]}; //, pdTexIds[currId]};
+  texData.outputTexIds = {velTexIds[currId], pdTexIds[currId]};
   texData.fragShader = "frag_init_all.glsl";
   drawToTexture( texData );
 
@@ -506,9 +511,9 @@ void display()
   texData.uniforms["absorption"] = 0.4;
   drawToScreen( texData );
 
-  glDeleteVertexArrays(1, &vaoId);
   glDeleteTextures(2, velTexIds);
   glDeleteTextures(2, pdTexIds);
+  glDeleteVertexArrays(1, &vaoId);
 }
 
 int main(int argc, char** argv)
@@ -527,6 +532,8 @@ int main(int argc, char** argv)
    GLint value;
    glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &value);
    printf("max 3D texture size: %d\n", value);
+   glGetIntegerv(GL_LAYER_PROVOKING_VERTEX, &value);
+   printf("layer provoking vertex: %s\n", dlGetProvokingMode(value));
 
    glutDisplayFunc(display);
    glutMainLoop();

@@ -1,5 +1,4 @@
 #version 330 core
-in vec3 geom_Color;
 in vec2 layerID;
 
 layout(location=0) out vec4 fragColor;
@@ -52,6 +51,4 @@ void main(void)
    currCoord.centerCell = vec3( gl_FragCoord.xy, layerID );
    float pressure = SF_jacobi( currCoord, pdtex );
    fragColor.x = pressure;
-
-   geom_Color;
 }

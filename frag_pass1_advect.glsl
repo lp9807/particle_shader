@@ -1,5 +1,4 @@
 #version 330 core
-in vec3 geom_Color;
 in vec2 layerID;
 
 layout(location=0) out vec4 fragColor;
@@ -112,5 +111,4 @@ void main(void)
    sim_output currCoord;
    currCoord.centerCell = vec3( gl_FragCoord.xy, layerID );
    fragColor = SF_advect_vel( currCoord, velocity );
-   geom_Color;
 }
