@@ -107,7 +107,7 @@ float Perlin(vec3 P)
 void main(void)
 {
 	vec3 cube = vec3( texWidth, texHeight, texDepth );
-	vec3 frequency = 10.0 / cube;  
+	vec3 frequency = 2.0 / cube;  
     vec3 pos = vec3( geom_UV.xy * cube.xy, layerID.x );  
     float noise = abs( Perlin( pos*frequency ) );
 

@@ -441,8 +441,8 @@ void display()
 
   // hard-coded time step
   const int limit = 2;
-  int currStep = 0;
-  int currId = 0, targetId = 1;
+  int currVelID = 0, resultVelID = 1;
+  int currPDID = 0, resultPDID = 1;
 
   simTexData texData;
 
@@ -452,64 +452,52 @@ void display()
   
   //init state of velocity and pressure texture
   texData.inputTexIds = {};
-  texData.outputTexIds = {velTexIds[currId], pdTexIds[currId]};
+  texData.outputTexIds = {velTexIds[currVelID], pdTexIds[currPDID]};
   texData.fragShader = "frag_init_all.glsl";
   drawToTexture( texData );
 
-/*
-  while( currStep < limit )
+  for( int i = 0; i < limit; i++ )
   {
     // 1. advect: 
     // input: velocity
     // output: intermediate velocity
-    texData.inputTexIds = { velTexIds[currId] };
+    texData.inputTexIds = { velTexIds[currVelID] };
     texData.inputTexNames = { "velocity" };
-    texData.outputTexIds = { velTexIds[targetId] };
+    texData.outputTexIds = { velTexIds[resultVelID] };
     texData.fragShader = "frag_pass1_advect.glsl";
     drawToTexture( texData );
 
     // 2. diffuse: 
     // input: pressure
     // output: new pressure
-    texData.inputTexIds = { pdTexIds[currId] };
+    texData.inputTexIds = { pdTexIds[currPDID] };
     texData.inputTexNames = { "pdtex" };
-    texData.outputTexIds = { pdTexIds[targetId] };
+    texData.outputTexIds = { pdTexIds[resultPDID] };
     texData.fragShader = "frag_pass2_diffuse.glsl";
     drawToTexture( texData );
 
     // 3. projection: 
     // input: intermediate velocity & pressure
     // output: divengence & final velocity
-    texData.inputTexIds = { velTexIds[targetId], pdTexIds[currId] };
+    texData.inputTexIds = { velTexIds[resultPDID], pdTexIds[currPDID] };
     texData.inputTexNames = { "velocity", "pdtex" };
-    texData.outputTexIds = { velTexIds[currId], pdTexIds[targetId] };
+    texData.outputTexIds = { velTexIds[currVelID], pdTexIds[resultPDID] };
     texData.fragShader = "frag_pass3_proj.glsl";
     drawToTexture( texData );
 
 
     // ray march to draw 3D texture
-    texData.inputTexIds = { velTexIds[currId] };
+    texData.inputTexIds = { velTexIds[currVelID] };
     texData.inputTexNames = { "velocity" };
     texData.outputTexIds = {};
     texData.fragShader = "frag_screen.glsl";
     texData.uniforms["absorption"] = 0.4;
     drawToScreen( texData );
-
-    currStep++;
     
     // swap texture
-    currId = (++currId)%2;
-    targetId = (1-currId);
+    currPDID = resultPDID;
+    resultPDID = (1-currPDID);
   }
-  */
-
-  // ray march to draw 3D texture
-  texData.inputTexIds = { velTexIds[currId] };
-  texData.inputTexNames = { "velocity" };
-  texData.outputTexIds = {};
-  texData.fragShader = "frag_screen.glsl";
-  texData.uniforms["absorption"] = 0.4;
-  drawToScreen( texData );
 
   glDeleteTextures(2, velTexIds);
   glDeleteTextures(2, pdTexIds);

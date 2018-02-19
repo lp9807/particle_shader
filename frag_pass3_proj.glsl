@@ -1,5 +1,6 @@
 #version 330 core
 in vec2 layerID;
+in vec2 geom_UV;
 
 layout(location=0) out vec4 fragColor;
 layout(location=1) out vec4 fragColor1;
@@ -71,7 +72,7 @@ vec4 SF_project( in sim_output simCoord,
 void main(void)
 {
   sim_output currCoord;
-  currCoord.centerCell = vec3( gl_FragCoord.xy, layerID );
+  currCoord.centerCell = vec3( geom_UV.xy, layerID );
   fragColor = SF_project( currCoord, velocity, pdtex );
   float divergence = SF_divergence(currCoord, velocity);
   fragColor.y = divergence;

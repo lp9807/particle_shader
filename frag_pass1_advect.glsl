@@ -1,5 +1,6 @@
 #version 330 core
 in vec2 layerID;
+in vec2 geom_UV;
 
 layout(location=0) out vec4 fragColor;
 
@@ -109,6 +110,6 @@ vec4 SF_advect_macCormack( in sim_output simCoord,
 void main(void)
 {
    sim_output currCoord;
-   currCoord.centerCell = vec3( gl_FragCoord.xy, layerID );
+   currCoord.centerCell = vec3( geom_UV.xy, layerID );
    fragColor = SF_advect_vel( currCoord, velocity );
 }
