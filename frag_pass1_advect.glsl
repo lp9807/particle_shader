@@ -2,7 +2,7 @@
 in vec2 layerID;
 in vec2 geom_UV;
 
-layout(location=0) out vec4 fragColor;
+layout(location=0) out vec4 v_pass1;
 
 uniform float texWidth;
 uniform float texHeight;
@@ -28,7 +28,7 @@ struct sim_output
    //int rtIndex; // specifies destination slice : the output 3D texture == layerID[0]
 };
 
-vec3 SF_cellIndex2TexCoord( vec3 index )
+vec3 SF_cellIndex2TexCoord( in vec3 index )
 {
    // convert a value in the range [0, gridSize] to one in the range [0,1].
    return vec3( index.x/texWidth,
@@ -36,13 +36,29 @@ vec3 SF_cellIndex2TexCoord( vec3 index )
                 (index.z+0.5)/texDepth );
 }
 
+sim_output SF_initCellPos( in vec3 centerPos )
+{
+  sim_output simCoord;
+  simCoord.cellIndex = centerPos;
+
+  vec3 center = SF_cellIndex2TexCoord( centerPos );
+  simCoord.centerCell = center;
+  simCoord.leftCell = vec3( center.x-1.0/texWidth, center.y, center.z );
+  simCoord.rightCell = vec3( center.x+1.0/texWidth, center.y, center.z );
+  simCoord.bottomCell = vec3( center.x, center.y-1.0/texHeight, center.z );
+  simCoord.topCell = vec3( center.x-1, center.y+1.0/texHeight, center.z );
+  simCoord.downCell = vec3( center.x-1, center.y, center.z-1.0/texDepth );
+  simCoord.upCell = vec3( center.x-1, center.y, center.z+1.0/texDepth );
+
+  return simCoord;
+}
+
 vec4 SF_advect_vel( in sim_output simCoord, in sampler3D velocityTex )
 {
    vec3 pos = simCoord.cellIndex;
    vec3 cellVel = texture( velocityTex, simCoord.centerCell ).xyz; // samplePointClamp
-   pos -= currTime * cellVel;
-   pos = SF_cellIndex2TexCoord( pos );
-   return texture( velocityTex, pos ); // sampling : linear
+   vec3 advectCell = SF_cellIndex2TexCoord( pos-currTime*cellVel );
+   return texture( velocityTex, advectCell ); // sampling : linear
 }
 
 vec4 SF_advect_macCormack( in sim_output simCoord, 
@@ -109,7 +125,8 @@ vec4 SF_advect_macCormack( in sim_output simCoord,
 
 void main(void)
 {
-   sim_output currCoord;
-   currCoord.centerCell = vec3( geom_UV.xy, layerID );
-   fragColor = SF_advect_vel( currCoord, velocity );
+   sim_output currCoord = SF_initCellPos( vec3( geom_UV.xy*vec2(texWidth, texHeight), layerID.x ) );
+
+   // advect velocity
+   v_pass1 = SF_advect_vel( currCoord, velocity );
 }

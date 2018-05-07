@@ -3,8 +3,8 @@
 in vec2 layerID;
 in vec2 geom_UV;
 
-layout(location=0) out vec4 velocityPass;
-layout(location=1) out vec4 pdPass;
+layout(location=0) out vec4 vColor;
+layout(location=1) out vec4 pdColor;
 
 uniform float texWidth;
 uniform float texHeight;
@@ -107,7 +107,7 @@ float Perlin(vec3 P)
 void main(void)
 {
 	vec3 cube = vec3( texWidth, texHeight, texDepth );
-	vec3 frequency = 2.0 / cube;  
+	vec3 frequency = 20.0 / cube;  
     vec3 pos = vec3( geom_UV.xy * cube.xy, layerID.x );  
     float noise = abs( Perlin( pos*frequency ) );
 
@@ -115,10 +115,11 @@ void main(void)
     vec3 center =  cube /( 2.0 + 0.5 );
     vec3 offset = pos - center;
     float d = sqrt(offset.x*offset.x + offset.y*offset.y + offset.z*offset.z)/;
-    float color = (d-noise) < r) ? 255:0;
+    float color = (d-noise) < r) ? 255 : 0;
     */
 
-	velocityPass = vec4( noise, noise, noise, 1.0 );
-    //velocityPass = vec4(geom_UV.xy, 0.0, 1.0);
-	pdPass = velocityPass;
+	vColor = vec4( noise, noise, noise, 1.0 );
+    //vColor = vec4(pos.xyz/cube.xyz, 1.0);
+    //vColor = vec4(layerID.xxx/cube.zzz, 1.0);
+	pdColor = vColor;
 }

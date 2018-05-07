@@ -17,7 +17,7 @@
 
 #define TEX_WIDTH 640
 #define TEX_HEIGHT 480
-#define TEX_DEPTH 100
+#define TEX_DEPTH 40
 
 struct geomData
 {
@@ -26,6 +26,7 @@ struct geomData
 
 struct simTexData
 {
+  GLuint inputFboId;
   std::vector<GLuint> inputTexIds;
   std::vector<std::string> inputTexNames;
   std::vector<GLuint> outputTexIds;
@@ -260,10 +261,7 @@ void drawToTexture( const simTexData& texData )
    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
    glEnableVertexAttribArray(2);
 
-   // define FBO
-   GLuint fboId;
-   glGenFramebuffers(1, &fboId);
-   glBindFramebuffer(GL_FRAMEBUFFER, fboId);
+   glBindFramebuffer(GL_FRAMEBUFFER, texData.inputFboId);
 
    std::vector<GLenum> attachments;
    attachments.reserve(texData.outputTexIds.size());
@@ -282,15 +280,15 @@ void drawToTexture( const simTexData& texData )
    // bind input data
    bindInputTexture( texData );
 
-   // clear FBO
-   glClearColor(1.0f, 0.0f, 0.0f, 0.0f);
-   glClear(GL_COLOR_BUFFER_BIT);
-
    // set uniform variables if any
    GLint program = LoadShader("vertex.glsl",texData.fragShader.c_str(),"geom.glsl");
    glUseProgram( program );
 
    setupUnifom( program, texData );
+
+   // clear FBO
+   //glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+   //glClear(GL_COLOR_BUFFER_BIT);
 
    // draw elements
    glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -307,7 +305,6 @@ void drawToTexture( const simTexData& texData )
    glDisableVertexAttribArray(2);
 
    glDeleteBuffers(3, vboId);
-   glDeleteFramebuffers(1, &fboId);
 }
 
 void drawToScreen( const simTexData& texData )
@@ -419,13 +416,17 @@ void display()
   glGenVertexArrays(1, &vaoId);
   glBindVertexArray(vaoId);
 
+  // define FBO
+  GLuint fboId;
+  glGenFramebuffers(1, &fboId);
+
   // all textures: input & output
   GLuint velTexIds[2]; // velocity0+1
   GLuint pdTexIds[2]; // [p]ressure[d]ivergence0+1 
   //TODO: GLuint extraTexIds[3]; // ? phi, phi_n_hat, phi_n_1_hat
+  
   glGenTextures(2, velTexIds);
   glGenTextures(2, pdTexIds);
-
   for( int i = 0; i < 2; i++) 
   {
     glBindTexture(GL_TEXTURE_3D, velTexIds[i]);
@@ -434,13 +435,14 @@ void display()
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
     glBindTexture(GL_TEXTURE_3D, pdTexIds[i]);
-    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   }
+  glBindTexture(GL_TEXTURE_3D, 0);
 
   // hard-coded time step
-  const int limit = 2;
+  const int limit = 5;
   int currVelID = 0, resultVelID = 1;
   int currPDID = 0, resultPDID = 1;
 
@@ -451,6 +453,7 @@ void display()
   texData.uniforms["texDepth"] = TEX_DEPTH;
   
   //init state of velocity and pressure texture
+  texData.inputFboId = fboId;
   texData.inputTexIds = {};
   texData.outputTexIds = {velTexIds[currVelID], pdTexIds[currPDID]};
   texData.fragShader = "frag_init_all.glsl";
@@ -458,9 +461,12 @@ void display()
 
   for( int i = 0; i < limit; i++ )
   {
+    texData.uniforms["currTime"] = i;
+
     // 1. advect: 
     // input: velocity
     // output: intermediate velocity
+    texData.inputFboId = fboId;
     texData.inputTexIds = { velTexIds[currVelID] };
     texData.inputTexNames = { "velocity" };
     texData.outputTexIds = { velTexIds[resultVelID] };
@@ -470,6 +476,7 @@ void display()
     // 2. diffuse: 
     // input: pressure
     // output: new pressure
+    texData.inputFboId = fboId;
     texData.inputTexIds = { pdTexIds[currPDID] };
     texData.inputTexNames = { "pdtex" };
     texData.outputTexIds = { pdTexIds[resultPDID] };
@@ -479,12 +486,12 @@ void display()
     // 3. projection: 
     // input: intermediate velocity & pressure
     // output: divengence & final velocity
+    texData.inputFboId = fboId;
     texData.inputTexIds = { velTexIds[resultPDID], pdTexIds[currPDID] };
     texData.inputTexNames = { "velocity", "pdtex" };
     texData.outputTexIds = { velTexIds[currVelID], pdTexIds[resultPDID] };
     texData.fragShader = "frag_pass3_proj.glsl";
     drawToTexture( texData );
-
 
     // ray march to draw 3D texture
     texData.inputTexIds = { velTexIds[currVelID] };
@@ -499,8 +506,10 @@ void display()
     resultPDID = (1-currPDID);
   }
 
+
   glDeleteTextures(2, velTexIds);
   glDeleteTextures(2, pdTexIds);
+  glDeleteFramebuffers(1, &fboId);
   glDeleteVertexArrays(1, &vaoId);
 }
 
@@ -510,18 +519,21 @@ int main(int argc, char** argv)
    glutInitDisplayMode(GLUT_3_2_CORE_PROFILE | GLUT_DOUBLE | GLUT_RGBA);
    glutInitWindowSize(640,480);
    glutInitWindowPosition(100,100);
-   glutCreateWindow("Ray March!");
+   glutCreateWindow("Noise Sim");
 
    const GLubyte* renderer = glGetString(GL_RENDERER);
    const GLubyte* version = glGetString(GL_VERSION);
+   const GLubyte* glsl_version = glGetString(GL_SHADING_LANGUAGE_VERSION);
    printf("Renderer: %s\n", renderer);
    printf("OpenGL version supported: %s\n", version);
+   printf("GLSL version supported: %s\n", glsl_version);
 
    GLint value;
    glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &value);
    printf("max 3D texture size: %d\n", value);
    glGetIntegerv(GL_LAYER_PROVOKING_VERTEX, &value);
    printf("layer provoking vertex: %s\n", dlGetProvokingMode(value));
+   //TODO: printf("max output vertices number : %d\n", );
 
    glutDisplayFunc(display);
    glutMainLoop();

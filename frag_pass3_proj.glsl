@@ -2,8 +2,8 @@
 in vec2 layerID;
 in vec2 geom_UV;
 
-layout(location=0) out vec4 fragColor;
-layout(location=1) out vec4 fragColor1;
+layout(location=0) out vec4 v_pass3;
+layout(location=1) out vec4 pd_pass3;
 
 uniform float texWidth;
 uniform float texHeight;
@@ -29,6 +29,31 @@ struct sim_output
    //int rtIndex; // specifies destination slice : the output 3D texture == layerID[0]
 };
 
+vec3 SF_cellIndex2TexCoord( in vec3 index )
+{
+   // convert a value in the range [0, gridSize] to one in the range [0,1].
+   return vec3( index.x/texWidth,
+                index.y/texHeight,
+                (index.z+0.5)/texDepth );
+}
+
+sim_output SF_initCellPos( in vec3 centerPos )
+{
+  sim_output simCoord;
+  simCoord.cellIndex = centerPos;
+
+  vec3 center = SF_cellIndex2TexCoord( centerPos );
+  simCoord.centerCell = center;
+  simCoord.leftCell = vec3( center.x-1.0/texWidth, center.y, center.z );
+  simCoord.rightCell = vec3( center.x+1.0/texWidth, center.y, center.z );
+  simCoord.bottomCell = vec3( center.x, center.y-1.0/texHeight, center.z );
+  simCoord.topCell = vec3( center.x-1, center.y+1.0/texHeight, center.z );
+  simCoord.downCell = vec3( center.x-1, center.y, center.z-1.0/texDepth );
+  simCoord.upCell = vec3( center.x-1, center.y, center.z+1.0/texDepth );
+
+  return simCoord;
+}
+
 float SF_divergence( in sim_output simCoord, in sampler3D velocityTex )
 {
    // Get velocicty values from neighboring cells
@@ -47,9 +72,9 @@ float SF_divergence( in sim_output simCoord, in sampler3D velocityTex )
    return divergence;
 }
 
-vec4 SF_project( in sim_output simCoord,
-                 in sampler3D velocityTex,
-                 in sampler3D PDTex )
+vec4  SF_project( in sim_output simCoord,
+                  in sampler3D velocityTex,
+                  in sampler3D PDTex )
 {
    // compute the gradient of pressure at the current cell by taking
    // central differences of neighboring pressure values.
@@ -71,9 +96,9 @@ vec4 SF_project( in sim_output simCoord,
 
 void main(void)
 {
-  sim_output currCoord;
-  currCoord.centerCell = vec3( geom_UV.xy, layerID );
-  fragColor = SF_project( currCoord, velocity, pdtex );
-  float divergence = SF_divergence(currCoord, velocity);
-  fragColor.y = divergence;
+  sim_output currCoord = SF_initCellPos( vec3( geom_UV.xy*vec2(texWidth, texHeight), layerID.x ) );
+  // udpate velocity
+  v_pass3 = SF_project( currCoord, velocity, pdtex );
+  // update divergence
+  pd_pass3.y = SF_divergence(currCoord, velocity);
 }

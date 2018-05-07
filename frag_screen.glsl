@@ -53,7 +53,7 @@ void main()
 			for( int s = 0; s < nbLightSamples; ++s )
 			{
 				float ld = texture( velocity, lpos).x;
-				T1 *= 1.0- absorption*lscale*ld;
+				T1 *= (1.0- absorption*lscale*ld);
 
 				if( T1 <= 0.01 ) {
 					break;
@@ -68,6 +68,6 @@ void main()
  
 	FragColor = vec4(Lo.xyz, 1.0-T);
 
-    //FragColor += texture( velocity, vec3(vtx_UV,i/100.0) );
+    //FragColor += texture( velocity, vec3(vtx_UV.xy,1) );
 	//FragColor.xyz = vec3(vtx_UV.xy, 0.0);
 }
