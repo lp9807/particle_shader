@@ -22,7 +22,13 @@
 
 struct geomData
 {
-   std::vector<GLuint> vboIds;
+   //std::vector<GLuint> vboIds;
+
+    GLuint vaoId;
+    GLuint fboId;
+    GLuint velTexIds[2]; // velocity0+1
+    GLuint pdTexIds[2];  // [p]ressure[d]ivergence0+1 
+    //TODO: GLuint extraTexIds[3]; // ? phi, phi_n_hat, phi_n_1_hat
 };
 
 struct simTexData
@@ -38,7 +44,12 @@ struct simTexData
 std::chrono::system_clock::duration deltaT;
 std::chrono::system_clock::time_point lastT;
 
-std::string readFile(const char *filePath) {
+geomData gData;
+int currVelID = 0, resultVelID = 1;
+int currPDID = 0, resultPDID = 1;
+
+std::string readFile(const char *filePath) 
+{
     if( !filePath ) return std::string();
 
     std::string content;
@@ -408,47 +419,35 @@ void initGeomData()
    glEnableVertexAttribArray(1);
 }
 
-void initTextureData()
-{
-
-}
-
-void display()
+void initialize()
 {
   // default VAO for gl3 core-profile.
-  GLuint vaoId;
-  glGenVertexArrays(1, &vaoId);
-  glBindVertexArray(vaoId);
+  glGenVertexArrays(1, &gData.vaoId);
+  glBindVertexArray(gData.vaoId);
 
   // define FBO
-  GLuint fboId;
-  glGenFramebuffers(1, &fboId);
+  glGenFramebuffers(1, &gData.fboId);
 
   // all textures: input & output
-  GLuint velTexIds[2]; // velocity0+1
-  GLuint pdTexIds[2]; // [p]ressure[d]ivergence0+1 
-  //TODO: GLuint extraTexIds[3]; // ? phi, phi_n_hat, phi_n_1_hat
-  
-  glGenTextures(2, velTexIds);
-  glGenTextures(2, pdTexIds);
+  glGenTextures(2, gData.velTexIds);
+  glGenTextures(2, gData.pdTexIds);
   for( int i = 0; i < 2; i++) 
   {
-    glBindTexture(GL_TEXTURE_3D, velTexIds[i]);
+    glBindTexture(GL_TEXTURE_3D, gData.velTexIds[i]);
     glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
-    glBindTexture(GL_TEXTURE_3D, pdTexIds[i]);
+    glBindTexture(GL_TEXTURE_3D, gData.pdTexIds[i]);
     glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   }
   glBindTexture(GL_TEXTURE_3D, 0);
+}
 
-  // hard-coded time step
-  int currVelID = 0, resultVelID = 1;
-  int currPDID = 0, resultPDID = 1;
-
+void display()
+{
   simTexData texData;
 
   texData.uniforms["texWidth"] = TEX_WIDTH;
@@ -456,9 +455,9 @@ void display()
   texData.uniforms["texDepth"] = TEX_DEPTH;
   
   //init state of velocity and pressure texture
-  texData.inputFboId = fboId;
+  texData.inputFboId = gData.fboId;
   texData.inputTexIds = {};
-  texData.outputTexIds = {velTexIds[currVelID], pdTexIds[currPDID]};
+  texData.outputTexIds = {gData.velTexIds[currVelID], gData.pdTexIds[currPDID]};
   texData.fragShader = "frag_init_all.glsl";
   drawToTexture( texData );
 
@@ -469,35 +468,35 @@ void display()
     // 1. advect: 
     // input: velocity
     // output: intermediate velocity
-    texData.inputFboId = fboId;
-    texData.inputTexIds = { velTexIds[currVelID] };
+    texData.inputFboId = gData.fboId;
+    texData.inputTexIds = { gData.velTexIds[currVelID] };
     texData.inputTexNames = { "velocity" };
-    texData.outputTexIds = { velTexIds[resultVelID] };
+    texData.outputTexIds = { gData.velTexIds[resultVelID] };
     texData.fragShader = "frag_pass1_advect.glsl";
     drawToTexture( texData );
 
     // 2. diffuse: 
     // input: pressure
     // output: new pressure
-    texData.inputFboId = fboId;
-    texData.inputTexIds = { pdTexIds[currPDID] };
+    texData.inputFboId = gData.fboId;
+    texData.inputTexIds = { gData.pdTexIds[currPDID] };
     texData.inputTexNames = { "pdtex" };
-    texData.outputTexIds = { pdTexIds[resultPDID] };
+    texData.outputTexIds = { gData.pdTexIds[resultPDID] };
     texData.fragShader = "frag_pass2_diffuse.glsl";
     drawToTexture( texData );
 
     // 3. projection: 
     // input: intermediate velocity & pressure
     // output: divengence & final velocity
-    texData.inputFboId = fboId;
-    texData.inputTexIds = { velTexIds[resultPDID], pdTexIds[currPDID] };
+    texData.inputFboId = gData.fboId;
+    texData.inputTexIds = { gData.velTexIds[resultPDID], gData.pdTexIds[currPDID] };
     texData.inputTexNames = { "velocity", "pdtex" };
-    texData.outputTexIds = { velTexIds[currVelID], pdTexIds[resultPDID] };
+    texData.outputTexIds = { gData.velTexIds[currVelID], gData.pdTexIds[resultPDID] };
     texData.fragShader = "frag_pass3_proj.glsl";
     drawToTexture( texData );
 
     // ray march to draw 3D texture
-    texData.inputTexIds = { velTexIds[currVelID] };
+    texData.inputTexIds = { gData.velTexIds[currVelID] };
     texData.inputTexNames = { "velocity" };
     texData.outputTexIds = {};
     texData.fragShader = "frag_screen.glsl";
@@ -509,11 +508,10 @@ void display()
     resultPDID = (1-currPDID);
   }
 
-
-  glDeleteTextures(2, velTexIds);
+  /*glDeleteTextures(2, velTexIds);
   glDeleteTextures(2, pdTexIds);
   glDeleteFramebuffers(1, &fboId);
-  glDeleteVertexArrays(1, &vaoId);
+  glDeleteVertexArrays(1, &vaoId);*/
 }
 
 void idle(void)
@@ -545,8 +543,10 @@ int main(int argc, char** argv)
    printf("max 3D texture size: %d\n", value);
    glGetIntegerv(GL_LAYER_PROVOKING_VERTEX, &value);
    printf("layer provoking vertex: %s\n", dlGetProvokingMode(value));
-   //TODO: printf("max output vertices number : %d\n", );
+   glGetIntegerv(GL_MAX_GEOMETRY_OUTPUT_VERTICES, &value);
+   printf("max output vertices number : %d\n", value);
 
+   initialize();
    glutDisplayFunc(display);
    glutIdleFunc(idle);
    glutPostRedisplay();
