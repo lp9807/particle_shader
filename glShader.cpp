@@ -14,6 +14,7 @@
 #include <map>
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 
 #define TEX_WIDTH 640
 #define TEX_HEIGHT 480
@@ -33,6 +34,9 @@ struct simTexData
   std::string fragShader;
   std::map<std::string, GLfloat> uniforms;
 };
+
+std::chrono::system_clock::duration deltaT;
+std::chrono::system_clock::time_point lastT;
 
 std::string readFile(const char *filePath) {
     if( !filePath ) return std::string();
@@ -442,7 +446,6 @@ void display()
   glBindTexture(GL_TEXTURE_3D, 0);
 
   // hard-coded time step
-  const int limit = 5;
   int currVelID = 0, resultVelID = 1;
   int currPDID = 0, resultPDID = 1;
 
@@ -459,9 +462,9 @@ void display()
   texData.fragShader = "frag_init_all.glsl";
   drawToTexture( texData );
 
-  for( int i = 0; i < limit; i++ )
   {
-    texData.uniforms["currTime"] = i;
+    texData.uniforms["currTime"] = 
+        std::chrono::duration_cast<std::chrono::seconds>(deltaT).count();
 
     // 1. advect: 
     // input: velocity
@@ -513,6 +516,15 @@ void display()
   glDeleteVertexArrays(1, &vaoId);
 }
 
+void idle(void)
+{
+    auto nowT = std::chrono::system_clock::now();
+    deltaT = nowT - lastT;
+    lastT = nowT;
+
+    glutPostRedisplay();
+}
+
 int main(int argc, char** argv)
 {
    glutInit(&argc, argv);
@@ -536,6 +548,9 @@ int main(int argc, char** argv)
    //TODO: printf("max output vertices number : %d\n", );
 
    glutDisplayFunc(display);
+   glutIdleFunc(idle);
+   glutPostRedisplay();
+
    glutMainLoop();
 
    return 0;
