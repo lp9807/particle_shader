@@ -53,10 +53,15 @@ sim_output SF_initCellPos( in vec3 centerPos )
   return simCoord;
 }
 
+vec4 SF_force( in sim_output simCoord )
+{
+   return vec4(0.0); //0.003 * vec4( 0.0, 9.8, 0.0, 0.0);
+}
+
 vec4 SF_advect_vel( in sim_output simCoord, in sampler3D velocityTex )
 {
    vec3 pos = simCoord.cellIndex;
-   vec3 cellVel = texture( velocityTex, simCoord.centerCell ).xyz; // samplePointClamp
+   vec3 cellVel = texture( velocityTex, simCoord.centerCell ).xyz * vec3(texWidth, texHeight, texDepth) ; // samplePointClamp
    vec3 advectCell = SF_cellIndex2TexCoord( pos-currTime*cellVel );
    return texture( velocityTex, advectCell ); // sampling : linear
 }
@@ -128,5 +133,5 @@ void main(void)
    sim_output currCoord = SF_initCellPos( vec3( geom_UV.xy*vec2(texWidth, texHeight), layerID.x ) );
 
    // advect velocity
-   v_pass1 = SF_advect_vel( currCoord, velocity );
+   v_pass1 = SF_advect_vel( currCoord, velocity ) + SF_force( currCoord );
 }

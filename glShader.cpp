@@ -7,6 +7,10 @@
 #include <GL/glut.h>
 #endif
 
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <string>
 #include <iostream>
 #include <fstream>
@@ -26,8 +30,9 @@ struct geomData
 
     GLuint vaoId;
     GLuint fboId;
-    GLuint velTexIds[2]; // velocity0+1
-    GLuint pdTexIds[2];  // [p]ressure[d]ivergence0+1 
+    GLuint velTexIds[2];  // velocity0+1
+    GLuint presTexIds[2];  // [p]ressure0+1
+    GLuint divTexId;      // divergence 
     //TODO: GLuint extraTexIds[3]; // ? phi, phi_n_hat, phi_n_1_hat
 };
 
@@ -46,7 +51,10 @@ std::chrono::system_clock::time_point lastT;
 
 geomData gData;
 int currVelID = 0, resultVelID = 1;
-int currPDID = 0, resultPDID = 1;
+int currPresID = 0, resultPresID = 1;
+
+double count = 0, angle = 0;
+glm::vec2 viewport(640,480);
 
 std::string readFile(const char *filePath) 
 {
@@ -277,6 +285,7 @@ void drawToTexture( const simTexData& texData )
    glEnableVertexAttribArray(2);
 
    glBindFramebuffer(GL_FRAMEBUFFER, texData.inputFboId);
+   glViewport( 0.0, 0.0, TEX_WIDTH, TEX_HEIGHT );
 
    std::vector<GLenum> attachments;
    attachments.reserve(texData.outputTexIds.size());
@@ -324,24 +333,72 @@ void drawToTexture( const simTexData& texData )
 
 void drawToScreen( const simTexData& texData )
 {
-   GLfloat quads[] = {
+   static const GLfloat quads[] = {
     -1.0f, -1.0f, 0.0f,
     -1.0f, 1.0f, 0.0f,
     1.0f, -1.0f, 0.0f,
     -1.0f, 1.0f, 0.0f,
     1.0f, -1.0f, 0.0f,
-    1.0f, 1.0f, 0.0f,
+    1.0f, 1.0f, 0.0f
    };
 
-   GLfloat quad_uvs[] = {
+   static const GLfloat quad_uvs[] = {
     0.0f, 0.0f,
     0.0f, 1.0f,
     1.0f, 0.0f,
     0.0f, 1.0f,
     1.0f, 0.0f,
-    1.0f, 1.0f };
+    1.0f, 1.0f 
+   };
 
-    GLenum error;
+   static const GLfloat cube_vertices[] = {
+    // front
+    -1.0, -1.0,  1.0,
+     1.0, -1.0,  1.0,
+     1.0,  1.0,  1.0,
+    -1.0,  1.0,  1.0,
+    // back
+    -1.0, -1.0, -1.0,
+     1.0, -1.0, -1.0,
+     1.0,  1.0, -1.0,
+    -1.0,  1.0, -1.0,
+   };
+
+   static const GLushort cube_elements[] = {
+    // front
+    0, 1, 2,
+    2, 3, 0,
+    // right
+    1, 5, 6,
+    6, 2, 1,
+    // back
+    7, 6, 5,
+    5, 4, 7,
+    // left
+    4, 0, 3,
+    3, 7, 4,
+    // bottom
+    4, 5, 1,
+    1, 0, 4,
+    // top
+    3, 2, 6,
+    6, 7, 3,
+   };
+
+   static const GLfloat cube_colors[] = {
+    // front colors
+    1.0, 0.0, 0.0,
+    0.0, 1.0, 0.0,
+    0.0, 0.0, 1.0,
+    1.0, 1.0, 1.0,
+    // back colors
+    1.0, 0.0, 0.0,
+    0.0, 1.0, 0.0,
+    0.0, 0.0, 1.0,
+    1.0, 1.0, 1.0,
+   };
+
+   GLenum error;
 
    // define VBO
    GLuint vboId[2];
@@ -349,15 +406,21 @@ void drawToScreen( const simTexData& texData )
 
    // vertex
    glBindBuffer(GL_ARRAY_BUFFER, vboId[0]);
-   glBufferData(GL_ARRAY_BUFFER, sizeof(quads), quads, GL_STATIC_DRAW );
+   glBufferData(GL_ARRAY_BUFFER, sizeof(cube_vertices), cube_vertices, GL_STATIC_DRAW );
    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
    glEnableVertexAttribArray(0);
 
-   // UV
+   // color
    glBindBuffer(GL_ARRAY_BUFFER, vboId[1]);
-   glBufferData(GL_ARRAY_BUFFER, sizeof(quad_uvs), quad_uvs, GL_STATIC_DRAW);
-   glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
+   glBufferData(GL_ARRAY_BUFFER, sizeof(cube_colors), cube_colors, GL_STATIC_DRAW);
+   glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
    glEnableVertexAttribArray(1);
+
+   // define IBO
+   GLuint iboId;
+   glGenBuffers(1, &iboId);
+   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, iboId);
+   glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cube_elements), cube_elements, GL_STATIC_DRAW );
 
    // bind texture
    bindInputTexture( texData );
@@ -365,22 +428,48 @@ void drawToScreen( const simTexData& texData )
    error = glGetError();
    printf("glGetError: %s\n", dlGetErrorString(error) );
 
-   glClear(GL_COLOR_BUFFER_BIT);
-
    // load shader
-   GLint program = LoadShader("vertex_screen.glsl",texData.fragShader.c_str(),NULL);
+   GLint program = LoadShader("vertex_screen.glsl",texData.fragShader.c_str(),nullptr);
    glUseProgram( program );
 
+   // matrix
+   glm::mat4 projection = glm::perspective( glm::radians(90.0f), (float)viewport[0]/viewport[1], 0.1f, 100.0f);
+   glm::vec3 eyePos = glm::vec3( 2.0*cos(angle), 0.0, 2.0f*sin(angle) );
+   glm::mat4 view = glm::lookAt( eyePos, glm::vec3( 0, 0, 0 ), glm::vec3( 0, 1, 0) );
+   glm::mat4 model = glm::mat4(1.0f);
+   glm::mat4 mvp = projection * view * model;
+   glm::mat4 invertMvp = glm::inverse(mvp);
+
+   // setup matrix uniform
+   GLuint eyePosID = glGetUniformLocation(program, "eyePos");
+   glUniform3fv(eyePosID, 1, glm::value_ptr(eyePos));
+   GLuint viewportID = glGetUniformLocation(program, "viewport");
+   glUniform2fv(viewportID, 1, glm::value_ptr(viewport));
+   GLuint MatrixID = glGetUniformLocation(program, "MVP");
+   glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &mvp[0][0]);
+   GLuint invertMatrixID = glGetUniformLocation(program, "invertMVP");
+   glUniformMatrix4fv(invertMatrixID, 1, GL_FALSE, &invertMvp[0][0]);
+
    setupUnifom( program, texData );
+
+   glEnable(GL_CULL_FACE );
+   glEnable(GL_DEPTH_TEST);
+   glDepthFunc(GL_LESS);
+   glViewport(0, 0, viewport[0], viewport[1]);
 
    error = glGetError();
    printf("glGetError: %s\n", dlGetErrorString(error) );
 
-   glDrawArrays(GL_TRIANGLES, 0, 6);
+   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+   glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_SHORT, 0);
 
    error = glGetError();
    printf("glGetError: %s\n", dlGetErrorString(error) );
    glUseProgram(0);
+
+   glDisable(GL_CULL_FACE);
+   glDisable(GL_DEPTH_TEST);
 
    glutSwapBuffers();
 
@@ -430,40 +519,53 @@ void initialize()
 
   // all textures: input & output
   glGenTextures(2, gData.velTexIds);
-  glGenTextures(2, gData.pdTexIds);
+  glGenTextures(2, gData.presTexIds);
+  glGenTextures(1, &gData.divTexId);
   for( int i = 0; i < 2; i++) 
   {
     glBindTexture(GL_TEXTURE_3D, gData.velTexIds[i]);
     glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
-    glBindTexture(GL_TEXTURE_3D, gData.pdTexIds[i]);
+    glBindTexture(GL_TEXTURE_3D, gData.presTexIds[i]);
     glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   }
+  
+  // temp divergence tex
+  glBindTexture(GL_TEXTURE_3D, gData.divTexId);
+  glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
   glBindTexture(GL_TEXTURE_3D, 0);
+
+  //init state of velocity and pressure texture
+  simTexData initData;
+
+  initData.uniforms["texWidth"] = TEX_WIDTH;
+  initData.uniforms["texHeight"] = TEX_HEIGHT;
+  initData.uniforms["texDepth"] = TEX_DEPTH;
+
+  initData.inputFboId = gData.fboId;
+  initData.inputTexIds = {};
+  initData.outputTexIds = {gData.velTexIds[0], gData.presTexIds[0]};
+  initData.fragShader = "frag_init_all.glsl";
+  drawToTexture( initData );
 }
 
-void display()
+void simulate()
 {
   simTexData texData;
-
   texData.uniforms["texWidth"] = TEX_WIDTH;
   texData.uniforms["texHeight"] = TEX_HEIGHT;
   texData.uniforms["texDepth"] = TEX_DEPTH;
   
-  //init state of velocity and pressure texture
-  texData.inputFboId = gData.fboId;
-  texData.inputTexIds = {};
-  texData.outputTexIds = {gData.velTexIds[currVelID], gData.pdTexIds[currPDID]};
-  texData.fragShader = "frag_init_all.glsl";
-  drawToTexture( texData );
-
   {
-    texData.uniforms["currTime"] = 
-        std::chrono::duration_cast<std::chrono::seconds>(deltaT).count();
+    texData.uniforms["currTime"] = count;
+    //std::chrono::duration_cast<std::chrono::seconds>(deltaT).count();
 
     // 1. advect: 
     // input: velocity
@@ -475,61 +577,98 @@ void display()
     texData.fragShader = "frag_pass1_advect.glsl";
     drawToTexture( texData );
 
-    // 2. diffuse: 
-    // input: pressure
-    // output: new pressure
+    // 2. divergence: 
+    // input: intermediate velocity
+    // output: intermediate divergence
     texData.inputFboId = gData.fboId;
-    texData.inputTexIds = { gData.pdTexIds[currPDID] };
-    texData.inputTexNames = { "pdtex" };
-    texData.outputTexIds = { gData.pdTexIds[resultPDID] };
-    texData.fragShader = "frag_pass2_diffuse.glsl";
+    texData.inputTexIds = { gData.velTexIds[resultVelID] };
+    texData.inputTexNames = { "velocity" };
+    texData.outputTexIds = { gData.divTexId };
+    texData.fragShader = "frag_pass2_divergence.glsl";
     drawToTexture( texData );
 
-    // 3. projection: 
+    // to add: apply force
+
+    for( int i = 0; i <3; i++ )
+    {
+      // 3. diffuse
+      // input: pressure & intermediate divergence
+      // output: updated pressure
+      texData.inputFboId = gData.fboId;
+      texData.inputTexIds = { gData.presTexIds[currPresID], gData.divTexId };
+      texData.inputTexNames = { "pressure", "divergence" };
+      texData.outputTexIds = { gData.presTexIds[resultPresID] };
+      texData.uniforms["rAlpha"] = 1.0/count;
+      texData.uniforms["rBeta"] = 1.0f/(4+texData.uniforms["rAlpha"]);
+      texData.fragShader = "frag_pass3_diffuse.glsl";
+      drawToTexture( texData );
+
+      currPresID = resultPresID;
+      resultPresID = (1-currPresID);
+    }
+
+    // 4. projection: 
     // input: intermediate velocity & pressure
-    // output: divengence & final velocity
+    // output: final velocity
     texData.inputFboId = gData.fboId;
-    texData.inputTexIds = { gData.velTexIds[resultPDID], gData.pdTexIds[currPDID] };
-    texData.inputTexNames = { "velocity", "pdtex" };
-    texData.outputTexIds = { gData.velTexIds[currVelID], gData.pdTexIds[resultPDID] };
-    texData.fragShader = "frag_pass3_proj.glsl";
+    texData.inputTexIds = { gData.velTexIds[resultVelID], gData.presTexIds[currPresID] };
+    texData.inputTexNames = { "velocity", "pressure" };
+    texData.outputTexIds = { gData.velTexIds[currVelID] };
+    texData.fragShader = "frag_pass4_proj.glsl";
     drawToTexture( texData );
 
     // ray march to draw 3D texture
-    texData.inputTexIds = { gData.velTexIds[currVelID] };
-    texData.inputTexNames = { "velocity" };
+    texData.inputTexIds = { gData.velTexIds[currVelID], gData.presTexIds[currPresID] };
+    texData.inputTexNames = { "velocity", "pressure" };
     texData.outputTexIds = {};
     texData.fragShader = "frag_screen.glsl";
     texData.uniforms["absorption"] = 0.4;
     drawToScreen( texData );
     
     // swap texture
-    currPDID = resultPDID;
-    resultPDID = (1-currPDID);
+    currPresID = resultPresID;
+    resultPresID = (1-currPresID);
   }
 
   /*glDeleteTextures(2, velTexIds);
   glDeleteTextures(2, pdTexIds);
   glDeleteFramebuffers(1, &fboId);
   glDeleteVertexArrays(1, &vaoId);*/
+
+  count += 0.001f;
 }
 
 void idle(void)
 {
     auto nowT = std::chrono::system_clock::now();
     deltaT = nowT - lastT;
-    lastT = nowT;
+    //lastT = nowT;
+    //count += 0.0000001f;
 
+    //glutPostRedisplay();
+}
+
+void timer(int t)
+{
+    glutTimerFunc( 10, timer, 0 );
+    angle += 0.01;
     glutPostRedisplay();
+}
+
+void reshape( int screen_width, int screen_height )
+{
+    viewport = glm::vec2( screen_width, screen_height );
+    glViewport(0, 0, screen_width, screen_height);
 }
 
 int main(int argc, char** argv)
 {
    glutInit(&argc, argv);
    glutInitDisplayMode(GLUT_3_2_CORE_PROFILE | GLUT_DOUBLE | GLUT_RGBA);
-   glutInitWindowSize(640,480);
-   glutInitWindowPosition(100,100);
-   glutCreateWindow("Noise Sim");
+   glutInitWindowSize(viewport[0],viewport[1]);
+   glutInitWindowPosition((glutGet(GLUT_SCREEN_WIDTH)-viewport[0])/2,
+                          (glutGet(GLUT_SCREEN_HEIGHT)-viewport[1])/2);
+   int window = glutCreateWindow("Noise Sim");
 
    const GLubyte* renderer = glGetString(GL_RENDERER);
    const GLubyte* version = glGetString(GL_VERSION);
@@ -537,6 +676,8 @@ int main(int argc, char** argv)
    printf("Renderer: %s\n", renderer);
    printf("OpenGL version supported: %s\n", version);
    printf("GLSL version supported: %s\n", glsl_version);
+
+   lastT = std::chrono::system_clock::now();
 
    GLint value;
    glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &value);
@@ -547,9 +688,11 @@ int main(int argc, char** argv)
    printf("max output vertices number : %d\n", value);
 
    initialize();
-   glutDisplayFunc(display);
+   glutDisplayFunc(simulate);
    glutIdleFunc(idle);
-   glutPostRedisplay();
+   glutTimerFunc( 10, timer, 0);
+   glutReshapeFunc( reshape );
+   //glutPostRedisplay();
 
    glutMainLoop();
 

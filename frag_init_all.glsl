@@ -118,8 +118,17 @@ void main(void)
     float color = (d-noise) < r) ? 255 : 0;
     */
 
-	vColor = vec4( noise, noise, noise, 1.0 );
+	//vColor = vec4( noise, noise, noise, 1.0 );
     //vColor = vec4(pos.xyz/cube.xyz, 1.0);
     //vColor = vec4(layerID.xxx/cube.zzz, 1.0);
-	pdColor = vColor;
+    vec3 emitter = vec3( 3.0, 0.0, 0.4 );
+    /*if( distance(pos,vec3(cube/2.0)) < 50.0 )
+    {
+        vColor.xyz = noise * emitter;
+    }
+    else
+    {*/
+        vColor.xyz = vec3(noise);
+    //}
+	pdColor.xyz = vec3( 0.0 ); // geom_UV.y*9.8 );
 }
