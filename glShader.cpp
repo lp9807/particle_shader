@@ -55,6 +55,8 @@ int currPresID = 0, resultPresID = 1;
 
 double count = 0, angle = 0;
 glm::vec2 viewport(640,480);
+glm::mat4 window_invert_mvp;
+glm::vec3 force_point( 0, 0, 0 );
 
 std::string readFile(const char *filePath) 
 {
@@ -231,6 +233,13 @@ void setupUnifom( GLint program, const simTexData& texData )
      if( loc != -1 ) {
       glUniform1i(loc, i);
      }
+   }
+
+   GLuint forcePointID = glGetUniformLocation(program, "forcepoint");
+   if( forcePointID != -1 )
+   {
+     glUniform3fv(forcePointID, 1, glm::value_ptr(force_point));
+     force_point = glm::vec3(0.0);
    }
 }
 
@@ -439,6 +448,8 @@ void drawToScreen( const simTexData& texData )
    glm::mat4 model = glm::mat4(1.0f);
    glm::mat4 mvp = projection * view * model;
    glm::mat4 invertMvp = glm::inverse(mvp);
+
+   window_invert_mvp = invertMvp;
 
    // setup matrix uniform
    GLuint eyePosID = glGetUniformLocation(program, "eyePos");
@@ -661,6 +672,19 @@ void reshape( int screen_width, int screen_height )
     glViewport(0, 0, screen_width, screen_height);
 }
 
+void click( int button, int state, int x, int y )
+{
+    if( button == GLUT_LEFT_BUTTON && state == GLUT_DOWN )
+    {
+      glm::vec3 worldPos = window_invert_mvp * glm::vec4( x/viewport.x, y/viewport.y, 0.0, 0.0 );
+      if( glm::all( glm::greaterThan(worldPos, glm::vec3(-1,-1,-1)) ) &&
+          glm::all( glm::lessThan(worldPos, glm::vec3(1,1,1)) ) )
+      {
+         force_point = (worldPos + 1.0f)/2.0f;
+      }
+    }
+}
+
 int main(int argc, char** argv)
 {
    glutInit(&argc, argv);
@@ -692,6 +716,7 @@ int main(int argc, char** argv)
    glutIdleFunc(idle);
    glutTimerFunc( 10, timer, 0);
    glutReshapeFunc( reshape );
+   glutMouseFunc( click );
    //glutPostRedisplay();
 
    glutMainLoop();

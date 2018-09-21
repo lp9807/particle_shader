@@ -10,6 +10,7 @@ uniform float texDepth;
 uniform float currTime;
 
 uniform sampler3D velocity;
+uniform vec3 forcepoint;
 
 struct sim_output
 {
@@ -55,7 +56,12 @@ sim_output SF_initCellPos( in vec3 centerPos )
 
 vec4 SF_force( in sim_output simCoord )
 {
-   return vec4(0.0); //0.003 * vec4( 0.0, 9.8, 0.0, 0.0);
+   if( all( greaterThan(forcepoint,vec3(0.0003)) ) )
+   {
+      vec3 dir = ( simCoord.centerCell - forcepoint );
+      return vec4( normalize(dir)*0.03/length(dir), 0.0);
+   }
+   return vec4(0.0);
 }
 
 vec4 SF_advect_vel( in sim_output simCoord, in sampler3D velocityTex )

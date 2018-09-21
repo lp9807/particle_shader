@@ -26,7 +26,7 @@ vec3 getPos()
 	vec4 ndcPos = vec4( (gl_FragCoord.x/viewport.x - 0.5)*2.0,
 	                    (gl_FragCoord.y/viewport.y - 0.5)*2.0,
 	                    (2.0*gl_FragCoord.z-gl_DepthRange.far-gl_DepthRange.near)/(gl_DepthRange.far-gl_DepthRange.near),
-	                    1.0);
+	                    1.0 );
 	vec4 origPos = invertMVP * (ndcPos/gl_FragCoord.w);
 	return origPos.xyz;
 }
