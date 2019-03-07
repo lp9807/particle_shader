@@ -5,6 +5,7 @@ in vec2 geom_UV;
 
 layout(location=0) out vec4 vColor;
 layout(location=1) out vec4 pdColor;
+layout(location=2) out vec4 scalarColor; //[0]: temparature, [1]: density
 
 uniform float texWidth;
 uniform float texHeight;
@@ -111,24 +112,26 @@ void main(void)
     vec3 pos = vec3( geom_UV.xy * cube.xy, layerID.x );  
     float noise = abs( Perlin( pos*frequency ) );
 
-    /*
+    
     vec3 center =  cube /( 2.0 + 0.5 );
     vec3 offset = pos - center;
-    float d = sqrt(offset.x*offset.x + offset.y*offset.y + offset.z*offset.z)/;
-    float color = (d-noise) < r) ? 255 : 0;
-    */
-
+    //float d = sqrt(offset.x*offset.x + offset.y*offset.y + offset.z*offset.z);
+    //float color = (d-noise) < r) ? 255 : 0;
+    
 	//vColor = vec4( noise, noise, noise, 1.0 );
     //vColor = vec4(pos.xyz/cube.xyz, 1.0);
     //vColor = vec4(layerID.xxx/cube.zzz, 1.0);
-    vec3 emitter = vec3( 3.0, 0.0, 0.4 );
-    /*if( distance(pos,vec3(cube/2.0)) < 50.0 )
+    /*vec3 emitter = vec3( 3.0, 0.0, 0.4 );
+    if( distance(pos,vec3(cube/2.0)) < 50.0 )
     {
         vColor.xyz = noise * emitter;
     }
     else
-    {*/
+    {
         vColor.xyz = vec3(noise);
-    //}
-	pdColor.xyz = vec3( 0.0 ); // geom_UV.y*9.8 );
+    }*/
+
+    vColor.xyz = vec3(0.3);    
+	pdColor.xyz = normalize(offset); //geom_UV.y*9.8 );
+    scalarColor.xyz = vec3( 300*noise, noise, 0.0 ); // 300K = 27C
 }

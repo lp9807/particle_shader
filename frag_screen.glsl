@@ -5,8 +5,8 @@ in vec3 vtx_Color;
 out vec4 FragColor;
 
 //uniform sampler3D density;
-uniform sampler3D pdtex;
-uniform sampler3D velocity;
+uniform sampler3D scalar;
+//uniform sampler3D velocity;
 
 /*uniform vec3 lightPos;
 uniform vec3 lightIntensity;*/
@@ -58,7 +58,7 @@ void main()
 
 	while( !isOutOfBox(pos) ) 
 	{
-		float curDensity = texture(velocity, normalizedPos(pos)).x;
+		float curDensity = texture(scalar, normalizedPos(pos)).y;
 
 		if( curDensity > 0.0 )
 		{
@@ -74,7 +74,7 @@ void main()
 			vec3 lpos = pos + lightDir;
 			while( !isOutOfBox(lpos) )
 			{
-				float ld = texture( velocity, normalizedPos(lpos) ).x;
+				float ld = texture( scalar, normalizedPos(lpos) ).y;
 				T1 *= (1.0 - absorption*lscale*ld);
 
 				if( T1 <= 0.01 ) {

@@ -32,6 +32,7 @@ struct geomData
     GLuint fboId;
     GLuint velTexIds[2];  // velocity0+1
     GLuint presTexIds[2];  // [p]ressure0+1
+    GLuint scalarTexIds[2]; // [s]calaar: temperature+density for SMOKE
     GLuint divTexId;      // divergence 
     //TODO: GLuint extraTexIds[3]; // ? phi, phi_n_hat, phi_n_1_hat
 };
@@ -52,10 +53,11 @@ std::chrono::system_clock::time_point lastT;
 geomData gData;
 int currVelID = 0, resultVelID = 1;
 int currPresID = 0, resultPresID = 1;
+int currScalarID = 0, resultScalarID = 1;
 
 double count = 0, angle = 0;
 glm::vec2 viewport(640,480);
-glm::mat4 window_invert_mvp;
+glm::mat4 window_invert_mvp, window_mvp;
 glm::vec3 force_point( 0, 0, 0 );
 
 std::string readFile(const char *filePath) 
@@ -449,6 +451,7 @@ void drawToScreen( const simTexData& texData )
    glm::mat4 mvp = projection * view * model;
    glm::mat4 invertMvp = glm::inverse(mvp);
 
+   window_mvp = mvp;
    window_invert_mvp = invertMvp;
 
    // setup matrix uniform
@@ -529,10 +532,12 @@ void initialize()
   glGenFramebuffers(1, &gData.fboId);
 
   // all textures: input & output
-  glGenTextures(2, gData.velTexIds);
-  glGenTextures(2, gData.presTexIds);
+  static int BUF_NUM = 2;
+  glGenTextures(BUF_NUM, gData.velTexIds);
+  glGenTextures(BUF_NUM, gData.presTexIds);
+  glGenTextures(BUF_NUM, gData.scalarTexIds);
   glGenTextures(1, &gData.divTexId);
-  for( int i = 0; i < 2; i++) 
+  for( int i = 0; i < BUF_NUM; i++) 
   {
     glBindTexture(GL_TEXTURE_3D, gData.velTexIds[i]);
     glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
@@ -543,6 +548,11 @@ void initialize()
     glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+    glBindTexture(GL_TEXTURE_3D, gData.scalarTexIds[i]);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, TEX_WIDTH, TEX_HEIGHT, TEX_DEPTH, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   }
   
   // temp divergence tex
@@ -553,7 +563,7 @@ void initialize()
 
   glBindTexture(GL_TEXTURE_3D, 0);
 
-  //init state of velocity and pressure texture
+  //init state
   simTexData initData;
 
   initData.uniforms["texWidth"] = TEX_WIDTH;
@@ -562,7 +572,7 @@ void initialize()
 
   initData.inputFboId = gData.fboId;
   initData.inputTexIds = {};
-  initData.outputTexIds = {gData.velTexIds[0], gData.presTexIds[0]};
+  initData.outputTexIds = {gData.velTexIds[0], gData.presTexIds[0], gData.scalarTexIds[0] };
   initData.fragShader = "frag_init_all.glsl";
   drawToTexture( initData );
 }
@@ -579,27 +589,34 @@ void simulate()
     //std::chrono::duration_cast<std::chrono::seconds>(deltaT).count();
 
     // 1. advect: 
-    // input: velocity
+    // input: velocity, scalar
     // output: intermediate velocity
     texData.inputFboId = gData.fboId;
-    texData.inputTexIds = { gData.velTexIds[currVelID] };
-    texData.inputTexNames = { "velocity" };
-    texData.outputTexIds = { gData.velTexIds[resultVelID] };
+    texData.inputTexIds = { gData.velTexIds[currVelID], gData.scalarTexIds[currScalarID] };
+    texData.inputTexNames = { "velocity", "scalar" };
+    texData.outputTexIds = { gData.velTexIds[resultVelID], gData.scalarTexIds[resultScalarID] };
+    texData.uniforms["amtT"] = 300.0;
+    texData.uniforms["buoyAlpha"] = 0.34;
+    texData.uniforms["buoyBeta"] = 1.3;
     texData.fragShader = "frag_pass1_advect.glsl";
     drawToTexture( texData );
+
+    currScalarID = resultScalarID;
+    resultScalarID = (1-currScalarID);
+
+    // apply force in advect pharse
 
     // 2. divergence: 
     // input: intermediate velocity
     // output: intermediate divergence
     texData.inputFboId = gData.fboId;
-    texData.inputTexIds = { gData.velTexIds[resultVelID] };
+    texData.inputTexIds = { gData.velTexIds[resultVelID]};
     texData.inputTexNames = { "velocity" };
     texData.outputTexIds = { gData.divTexId };
     texData.fragShader = "frag_pass2_divergence.glsl";
     drawToTexture( texData );
 
-    // to add: apply force
-
+    // can run jacobi iteration multiple times.
     for( int i = 0; i <3; i++ )
     {
       // 3. diffuse
@@ -629,8 +646,8 @@ void simulate()
     drawToTexture( texData );
 
     // ray march to draw 3D texture
-    texData.inputTexIds = { gData.velTexIds[currVelID], gData.presTexIds[currPresID] };
-    texData.inputTexNames = { "velocity", "pressure" };
+    texData.inputTexIds = { gData.scalarTexIds[currScalarID] };
+    texData.inputTexNames = { "scalar" };
     texData.outputTexIds = {};
     texData.fragShader = "frag_screen.glsl";
     texData.uniforms["absorption"] = 0.4;
@@ -641,8 +658,9 @@ void simulate()
     resultPresID = (1-currPresID);
   }
 
-  /*glDeleteTextures(2, velTexIds);
-  glDeleteTextures(2, pdTexIds);
+  /*glDeleteTextures(BUF_NUM, velTexIds);
+  glDeleteTextures(BUF_NUM, scalarTexIds);
+  glDeleteTextures(BUF_NUM, presTexIds);
   glDeleteFramebuffers(1, &fboId);
   glDeleteVertexArrays(1, &vaoId);*/
 
@@ -676,7 +694,9 @@ void click( int button, int state, int x, int y )
 {
     if( button == GLUT_LEFT_BUTTON && state == GLUT_DOWN )
     {
-      glm::vec3 worldPos = window_invert_mvp * glm::vec4( x/viewport.x, y/viewport.y, 0.0, 0.0 );
+      glm::vec4 clipPos = glm::vec4((x/viewport.x - 0.5f)*1.0f, (y/viewport.y - 0.5f)*1.0f, -0.02f, 0.0f);
+      float newW = window_mvp[3][2]/(clipPos.z - window_mvp[2][2]/window_mvp[2][3]);
+      glm::vec3 worldPos = window_invert_mvp * (clipPos);
       if( glm::all( glm::greaterThan(worldPos, glm::vec3(-1,-1,-1)) ) &&
           glm::all( glm::lessThan(worldPos, glm::vec3(1,1,1)) ) )
       {

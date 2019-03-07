@@ -3,14 +3,20 @@ in vec2 layerID;
 in vec2 geom_UV;
 
 layout(location=0) out vec4 v_pass1;
+layout(location=1) out vec4 td_pass2;
 
 uniform float texWidth;
 uniform float texHeight;
 uniform float texDepth;
 uniform float currTime;
+uniform float ambT;
+uniform float buoyAlpha;
+uniform float buoyBeta;
+uniform vec3 forcepoint;
 
 uniform sampler3D velocity;
-uniform vec3 forcepoint;
+uniform sampler3D scalar;
+
 
 struct sim_output
 {
@@ -54,14 +60,27 @@ sim_output SF_initCellPos( in vec3 centerPos )
   return simCoord;
 }
 
-vec4 SF_force( in sim_output simCoord )
+vec4 SF_force( in sim_output simCoord, in sampler3D temperatureTex )
 {
    if( all( greaterThan(forcepoint,vec3(0.0003)) ) )
    {
       vec3 dir = ( simCoord.centerCell - forcepoint );
       return vec4( normalize(dir)*0.03/length(dir), 0.0);
    }
-   return vec4(0.0);
+   // add buoyancy for smoke
+   vec3 td = texture( temperatureTex, simCoord.centerCell ).xyz;
+   float buoy = -buoyAlpha*td.y + buoyBeta*(td.x - ambT);
+   return vec4( 0.0, 0.0, buoy, 0.0 ); 
+
+   //return vec4(0.0);
+}
+
+vec4 SF_advect_scal( in sim_output simCoord, in sampler3D velocityTex, in sampler3D scalarTex )
+{
+   vec3 pos = simCoord.cellIndex;
+   vec3 cellVel = texture( velocityTex, simCoord.centerCell ).xyz * vec3(texWidth, texHeight, texDepth) ; // samplePointClamp
+   vec3 advectCell = SF_cellIndex2TexCoord( pos-currTime*cellVel );
+   return texture( scalarTex, advectCell ); // sampling : linear
 }
 
 vec4 SF_advect_vel( in sim_output simCoord, in sampler3D velocityTex )
@@ -139,5 +158,7 @@ void main(void)
    sim_output currCoord = SF_initCellPos( vec3( geom_UV.xy*vec2(texWidth, texHeight), layerID.x ) );
 
    // advect velocity
-   v_pass1 = SF_advect_vel( currCoord, velocity ) + SF_force( currCoord );
+   v_pass1 = SF_advect_vel( currCoord, velocity ) + SF_force( currCoord, scalar );
+   // advect temperature
+   td_pass2 = SF_advect_scal( currCoord, velocity, scalar );
 }
