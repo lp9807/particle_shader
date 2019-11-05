@@ -70,7 +70,7 @@ vec4 SF_force( in sim_output simCoord, in sampler3D temperatureTex )
    // add buoyancy for smoke
    vec3 td = texture( temperatureTex, simCoord.centerCell ).xyz;
    float buoy = -buoyAlpha*td.y + buoyBeta*(td.x - ambT);
-   return vec4( 0.0, 0.0, buoy, 0.0 ); 
+   return vec4( 0.0, buoy, 0.0, 0.0 ); 
 
    //return vec4(0.0);
 }
