@@ -1,11 +1,11 @@
 #version 330 core
 
 // Interpolated values from the vertex shaders
-in vec3 vtx_Color;
+in vec3 FragInColor;
 out vec4 FragColor;
 
 //uniform sampler3D density;
-uniform sampler3D scalar;
+uniform sampler3D ScalarCube;
 //uniform sampler3D velocity;
 
 /*uniform vec3 lightPos;
@@ -70,7 +70,7 @@ void main()
 
 	while( !isOutOfBox(pos) ) 
 	{
-		float curDensity = texture(scalar, normalizedPos(pos)).y;
+		float curDensity = texture(ScalarCube, normalizedPos(pos)).y;
 
 		if( curDensity > 0.001 )
 		{
@@ -79,7 +79,7 @@ void main()
 			while( !isOutOfBox(lpos) )
 			{
                lpos += lightDir;
-               ld += texture( scalar, normalizedPos(lpos) ).y;
+               ld += texture( ScalarCube, normalizedPos(lpos) ).y;
                if(ld>lthresh) break;
 			}
 
@@ -92,8 +92,8 @@ void main()
 		pos += eyeDir;
 	}
  
-	FragColor = vec4(Lo.xyz, 1.0-T) + 0.002*vec4(vtx_Color,0.0);
+	FragColor = vec4(Lo.xyz, 1.0-T) + 0.002*vec4(FragInColor,0.0);
 
     //FragColor += texture( velocity, vec3(geom_UV.xy,1) );
-	//FragColor.xyz = vtx_Color.xyz;
+	//FragColor.xyz = FragInColor.xyz;
 }

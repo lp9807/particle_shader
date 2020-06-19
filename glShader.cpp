@@ -647,9 +647,10 @@ void simulate()
 
     // ray march to draw 3D texture
     texData.inputTexIds = { gData.scalarTexIds[currScalarID] };
-    texData.inputTexNames = { "scalar" };
+    texData.inputTexNames = { "scalarCube" };
     texData.outputTexIds = {};
     texData.fragShader = "frag_screen.glsl";
+    //texData.fragShader = "frag_ray_marching.glsl";
     texData.uniforms["absorption"] = 0.4;
     drawToScreen( texData );
     
